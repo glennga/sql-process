@@ -1,0 +1,10 @@
+catalog.driver=com.ibm.db2.jcc.DB2Driver
+catalog.hostname=10.0.0.3:50001/mycatdb
+catalog.username=db2inst1
+catalog.passwd=mypasswd
+
+tablename=books
+
+partition.method=hash
+partition.column=age
+partition.param1=2
