@@ -2,9 +2,7 @@
 """
 Contains functions to dissect (parse) various files (clustercfg, sqlfile).
 
-Usage: clustercfg([clustercfg])
-       table([SQL-statement])
-       is_select([SQL-statement])
+Usage: TODO: Update the usage section.
 """
 
 from configparser import ConfigParser
@@ -12,168 +10,250 @@ from math import inf
 
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
 
-import catalog
+import listen
 from parse.SQLiteLexer import SQLiteLexer
-from parse.SQLiteListener import SQLiteListener
 from parse.SQLiteParser import SQLiteParser
 
 
-class _TableNameStoreListener(SQLiteListener):
-    """ Private listener class to record the table name. """
-    table_name = ''
+class SQLFile:
+    """ All dissecting operations that deal with the SQL file. """
 
-    def enterTable_name(self, ctx: SQLiteParser.Table_nameContext):
-        """ Called when table_name is found. Records the table_name token to the 'table_name' field.
+    @staticmethod
+    def as_string(f):
+        """ Parse the given SQL file. The first argument should be returned, whose end is denoted
+        with a semicolon. The resultant is a **list** with a single element. A single string
+         indicates an error.
 
-        :param ctx: Context to parse.
-        :return: None.
+        :param f: Filename of the SQL file.
+        :return: String associated with error if there exists no catalog hostname. Otherwise,
+        a one element list with the SQL to execute.
         """
-        self.table_name = ctx.getText()
+        try:
+            with open(f) as sqlfile_f:
+                s = sqlfile_f.read()
+        except FileNotFoundError as e:
+            return str(e)
+
+        # Returning a single element list here...
+        return 'No terminating semicolon.' if ';' not in s else [s.split(';', 1)[0]]
+
+    @staticmethod
+    def is_ddl(s):
+        """ TODO: Finish the documentation here.
+
+        :param s:
+        :return:
+        """
+        # Create the parse tree for the given SQL string.
+        lexer = SQLiteLexer(InputStream(s))
+        lexer.removeErrorListeners()
+        parser = SQLiteParser(CommonTokenStream(lexer))
+        parser.removeErrorListeners()
+        tree = parser.parse()
+
+        # Walk the parse tree and determine what type of statement 's' is.
+        t = listen.StatementType()
+        ParseTreeWalker().walk(t, tree)
+
+        return t.is_ddl
+
+    @staticmethod
+    def is_drop_ddl(s):
+        """ TODO: Finish the documentation here.
+
+        :param s:
+        :return:
+        """
+        # Create the parse tree for the given SQL string.
+        lexer = SQLiteLexer(InputStream(s))
+        lexer.removeErrorListeners()
+        parser = SQLiteParser(CommonTokenStream(lexer))
+        parser.removeErrorListeners()
+        tree = parser.parse()
+
+        # Walk the parse tree and determine what type of statement 's' is.
+        t = listen.StatementType()
+        ParseTreeWalker().walk(t, tree)
+
+        return t.is_drop
+
+    def is_select(s):
+        """ TODO: Finish the documentation here.
 
 
-def sqlfile(f):
-    """ Parse the given SQL file. The first argument should be returned, whose end is denoted
-    with a semicolon.
+        :param s:
+        :return:
+        """
+        # Create the parse tree for the given SQL string.
+        lexer = SQLiteLexer(InputStream(s))
+        lexer.removeErrorListeners()
+        parser = SQLiteParser(CommonTokenStream(lexer))
+        parser.removeErrorListeners()
+        tree = parser.parse()
 
-    :param f: Filename of the SQL file.
-    :return: False if there exists no terminating semicolon. Otherwise, a string containing the
-    DDL to execute.
-    """
-    with open(f) as sqlfile_f:
-        s = sqlfile_f.read()
+        # Walk the parse tree and determine what type of statement 's' is.
+        t = listen.StatementType()
+        ParseTreeWalker().walk(t, tree)
 
-    return False if ';' not in s else s.split(';')[0]
+        return t.is_select
 
+    def table(s):
+        """ Given a SQLite string, extract the TABLE associated with the operation.
 
-def is_select(s):
-    """ Given a SQLite string, determine if the statement is a SELECT operation.
+        :param s: SQLite to extract table from.
+        :return: False if the SQL statement does not contain a table (i.e. is formatted incorrectly).
+        Otherwise, the table associated with the SQL.
+        """
+        # Create the parse tree for the given SQL string.
+        lexer = SQLiteLexer(InputStream(s))
+        lexer.removeErrorListeners()
+        parser = SQLiteParser(CommonTokenStream(lexer))
+        parser.removeErrorListeners()
+        tree = parser.parse()
 
-    :param s: SQLite to determine the operation type from.
-    :return: True if the given string is a SELECT operation. False otherwise.
-    """
-    # SELECT statements with resulting tuples always have 'SELECT' as the first word.
-    return s.split()[0].upper() == 'SELECT'
+        # Walk the parse tree and find the table name.
+        t = listen.TableNameStore()
+        ParseTreeWalker().walk(t, tree)
 
-
-def table(s):
-    """ Given a SQLite string, extract the TABLE associated with the operation.
-
-    :param s: SQLite to extract table from.
-    :return: False if the SQL statement does not contain a table (i.e. is formatted incorrectly).
-    Otherwise, the table associated with the SQL.
-    """
-    # Create the parse tree for the given SQL string.
-    lexer = SQLiteLexer(InputStream(s))
-    parser = SQLiteParser(CommonTokenStream(lexer))
-    tree = parser.parse()
-
-    # Walk the parse tree and find the table name.
-    t = _TableNameStoreListener()
-    ParseTreeWalker().walk(t, tree)
-
-    # If there exists no table name, return false.
-    return False if t.table_name == '' else t.table_name
+        # If there exists no table name, return false.
+        return False if t.table_name == '' else t.table_name
 
 
-def clustercfg_catalog(f):
-    """ TODO: Finish the description here.
+class ClusterCFG:
+    """ All dissecting operations that deal with the clustercfg file. """
 
-    :param f:
-    :return: String associated with error if there exists no catalog hostname. Otherwise,
-    a one element list with the URI associated with the catalog node.
-    """
-    config = ConfigParser()
+    @staticmethod
+    def catalog_uri(f):
+        """ TODO: Finish the description here.
 
-    # Append dummy section to given configuration file, read the config file.
-    with open(f) as clustercfg_f:
-        config_string = '[D]\n' + clustercfg_f.read()
-    config.read_string(config_string)
+        :param f:
+        :return: String associated with error if there exists no catalog hostname. Otherwise,
+        a one element list with the URI associated with the catalog node.
+        """
+        config = ConfigParser()
 
-    # Determine the catalog URI.
-    if not {'catalog.hostname'}.issubset([k for k in config['D']]):
-        return '\'catalog.hostname\' is not defined.'
-    return [config['D']['catalog.hostname']]
+        # Append dummy section to given configuration file, read the config file.
+        try:
+            with open(f) as clustercfg_f:
+                config_string = '[D]\n' + clustercfg_f.read()
+            config.read_string(config_string)
+        except FileNotFoundError as e:
+            return str(e)
 
+        # Determine the catalog URI.
+        if not {'catalog.hostname'}.issubset([k for k in config['D']]):
+            return '\'catalog.hostname\' is not defined.'
+        return [config['D']['catalog.hostname']]
 
-def _clustercfg_partition(p_m, r_d, config):
-    """ TODO: Finish the description.
+    @staticmethod
+    def node_uris(f):
+        """ TODO: Finish the documentation here.
 
-    :param p_m:
-    :param r_d:
-    :param config:
-    :return:
-    """
-    inf_a = lambda b: inf if b == '+inf' else (-inf if b == '-inf' else float(b))
+        :param f:
+        :return:
+        """
+        config = ConfigParser()
 
-    # TODO: Add comments here.
-    try:
-        if p_m.lower() == 'range':
-            r_d.update({'partmtd': 1, 'partcol': config['D']['partition.column'],
-                        'param1': [], 'param2': []})
+        # Append dummy section to given configuration file, read the config file.
+        try:
+            with open(f) as clustercfg_f:
+                config_string = '[D]\n' + clustercfg_f.read()
+            config.read_string(config_string)
+        except FileNotFoundError as e:
+            return str(e)
 
-            for i in range(int(config['D']['numnodes'])):
-                r_d['param1'].append(inf_a(config['D']['partition.node' + str(i + 1) + '.param1']))
-                r_d['param2'].append(inf_a(config['D']['partition.node' + str(i + 1) + '.param2']))
+        # Ensure that 'numnodes' exist.
+        if not {'numnodes'}.issubset([k for k in config['D']]):
+            return '\'numnodes\' is not defined.'
+        try:
+            n = int(config['D']['numnodes'])
+        except ValueError:
+            return '\'numnodes\' is not a valid integer.'
 
-        elif p_m.lower() == 'hash':
-            r_d.update({'partmtd': 2, 'partcol': config['D']['partition.column'],
-                        'param1': int(config['D']['partition.param1'])})
+        nodes = []
+        try:
+            [nodes.append(config['D']['node' + str(i + 1) + '.hostname']) for i in range(n)]
+            return nodes
+        except KeyError:
+            return 'Node entries not formatted correctly.'
 
-        elif p_m.lower() == 'notpartition':
-            r_d.update({'partmtd': 0})
+    @staticmethod
+    def partition(p_m, r_d, config):
+        """ TODO: Finish the description.
 
+        :param p_m:
+        :param r_d:
+        :param config:
+        :return:
+        """
+        inf_a = lambda b: inf if b == '+inf' else (-inf if b == '-inf' else float(b))
+
+        # TODO: Add comments here.
+        try:
+            if p_m.lower() == 'range':
+                r_d.update({'partmtd': 1, 'partcol': config['D']['partition.column'],
+                            'param1': [], 'param2': []})
+
+                for i in range(int(config['D']['numnodes'])):
+                    r_d['param1'].append(inf_a(config['D']['partition.node' +
+                                                           str(i + 1) + '.param1']))
+
+                    r_d['param2'].append(inf_a(config['D']['partition.node' +
+                                                           str(i + 1) + '.param2']))
+
+            elif p_m.lower() == 'hash':
+                r_d.update({'partmtd': 2, 'partcol': config['D']['partition.column'],
+                            'param1': int(config['D']['partition.param1'])})
+
+            elif p_m.lower() == 'notpartition':
+                r_d.update({'partmtd': 0})
+
+            else:
+                return '\'partition.method\' not in space [range, hash, notpartition]'
+
+        except KeyError as e:
+            return str(e)
+        except ValueError as e:
+            return '\'param1\', \'param2\', or \'numnodes\' is not formatted correctly: ' + str(e)
+
+        return r_d
+
+    @staticmethod
+    def load(f):
+        """ TODO: Finish the description here.
+
+        :param f:
+        :return:
+        """
+        config, r_d = ConfigParser(), {}
+
+        # Append dummy section to given configuration file, read the config file.
+        with open(f) as clustercfg_f:
+            config_string = '[D]\n' + clustercfg_f.read()
+        config.read_string(config_string)
+
+        # Determine the catalog URI. Return any errors if they exist (i.e. not a list).
+        c_u = ClusterCFG.catalog_uri(f)
+        if isinstance(c_u, str):
+            return c_u
+
+        # Determine the partitioning.
+        if not {'partition.method', 'tablename'}.issubset([k for k in config['D']]):
+            return '\'partition.method\' or \'tablename\' is not defined.'
+        r_d.update({'tname': config['D']['tablename']})
+
+        # Based on the partitioning specified, parse appropriate sections. Return error if exists.
+        r_pd = ClusterCFG.partition(config['D']['partition.method'], r_d, config)
+        if not isinstance(r_pd, dict):
+            return r_pd
         else:
-            return '\'partition.method\' not in space [range, hash, notpartition]'
+            r_d = r_pd
 
-    except KeyError as e:
-        return str(e)
-    except ValueError as e:
-        return '\'param1\', \'param2\', or \'numnodes\' is not formatted correctly: ' + str(e)
+        # Determine the node count to pass out.
+        numnodes = 0
+        if r_d['partmtd'] == 1:
+            numnodes = int(config['D']['numnodes'])
+        elif r_d['partmtd'] == 2:
+            numnodes = r_d['param1']
 
-    return r_d
-
-
-def clustercfg_load(f):
-    """ TODO: Finish the description here.
-
-    :param f:
-    :return: 2 element list containing the catalog URI
-    """
-    config, r_d = ConfigParser(), {}
-
-    # Append dummy section to given configuration file, read the config file.
-    with open(f) as clustercfg_f:
-        config_string = '[D]\n' + clustercfg_f.read()
-    config.read_string(config_string)
-
-    # Determine the catalog URI. Return any errors if they exist (i.e. not a list).
-    catalog_uri = clustercfg_catalog(f)
-    if not hasattr(catalog_uri, '__iter__'):
-        return catalog_uri
-
-    # Determine the partitioning.
-    if not {'partition.method', 'tablename'}.issubset([k for k in config['D']]):
-        return '\'partition.method\' or \'tablename\' is not defined.'
-    r_d.update({'tname': config['D']['tablename']})
-
-    # Based on the partitioning specified, parse the appropriate sections. Return error if exists.
-    r_pd = _clustercfg_partition(config['D']['partition.method'], r_d, config)
-    if not isinstance(r_pd, dict):
-        return r_pd
-    else:
-        r_d = r_pd
-
-    # If the number of nodes here does not match the nodes in catalog, return with an error.
-    if r_d['partmtd'] == 1:
-        r_c = catalog.verify_node_count(catalog_uri, r_d['tname'], int(config['D']['numnodes']))
-    elif r_d['partmtd'] == 2:
-        r_c = catalog.verify_node_count(catalog_uri, r_d['tname'], r_d['param1'])
-    else:
-        r_c = True
-
-    if isinstance(r_c, str):
-        return r_c
-    elif not r_c:
-        return '\'numnodes\' specified does not match number of nodes in catalog node'
-    else:
-        return catalog_uri[0], r_d
+        return c_u[0], r_d, numnodes

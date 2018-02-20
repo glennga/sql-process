@@ -3,174 +3,265 @@
 Contains functions to manage the catalog table, locally (client side requests) and remotely (server
 side actions).
 
-Usage: is_connect([catalog-node-info])
-       create_table_local([catalog-filename])
-       log_remote([cluster-info], [DDL-statement])
-       log_local([server-socket], [cluster-info], [DDL-statement])
+Usage: TODO: Update the usage document.
 """
 
 import pickle
 import socket
 import sqlite3 as sql
 
-import dissect
+from dissect import SQLFile
 
-def is_connect(c):
-    """ Given information about the catalog node, check if a connection is possible to the
-    catalog node.
 
-    :param c: The value of the key-value pair inside clustercfg.
-    :return: True if a connection can be achieved. False otherwise.
-    """
-    host, port = c.split(':')
-    port = port.split('/')[0]
+class LocalCatalog:
+    """ All catalog operations for the catalog node itself (operating locally). """
 
-    # Create our socket and attempt to connect.
-    try:
+    @staticmethod
+    def create_dtable(f):
+        """ Given the name of the database file, create the table. This information is specified in
+        the homework assignment.
+
+        :param f: Location of the database file to store this table on.
+        :return: None.
+        """
+        conn = sql.connect(f)
+
+        cur = conn.cursor()
+        cur.execute('CREATE TABLE IF NOT EXISTS dtables ('
+                    'tname CHARACTER(32), '
+                    'nodedriver CHARACTER(64), '
+                    'nodeurl CHARACTER(128), '
+                    'nodeuser  CHARACTER(16), '
+                    'nodepasswd  CHARACTER(16), '
+                    'partmtd INT, '
+                    'nodeid INT, '
+                    'partcol CHARACTER(32), '
+                    'partparam1 CHARACTER(128), '
+                    'partparam2 CHARACTER(128)); ')
+
+    @staticmethod
+    def record_ddl(k, r):
+        """ Given node URIs of the cluster and the DDL statement to execute, insert metadata
+        about which nodes and which tables are affected.
+
+        :param k: Socket connection to send response through.
+        :param r: List passed to socket, containing the filename associated with the catalog node
+        database the cluster node URIs, and the SQL being executed.
+        :return: None.
+        """
+        f, node_uris, ddl = r[1:4]
+
+        # Connect to SQLite database using the filename.
+        conn = sql.connect(f)
+        cur = conn.cursor()
+        LocalCatalog.create_dtable(f)
+
+        # Determine the table being operated on in the DDL.
+        table = SQLFile.table(ddl)
+        if table is False:
+            k.send(pickle.dumps('No table found. SQL statement formatted incorrectly.'))
+            return
+
+        # Assemble our tuples and perform the insertion/deletion.
+        try:
+            if SQLFile.is_drop_ddl(ddl):
+                cur.execute('DELETE FROM dtables WHERE tname = ?', (table, ))
+            else:
+                tuples = [(table, node_uris[i], i + 1) for i in range(len(node_uris))]
+                cur.executemany('INSERT INTO dtables VALUES (?, NULL, ?, NULL, NULL, NULL, ?, '
+                                'NULL, NULL, NULL)', tuples)
+        except sql.Error as e:
+            k.send(pickle.dumps(str(e))), conn.rollback(), conn.close()
+            return
+
+        # No error exists. Commit and send the success message.
+        conn.commit(), conn.close()
+        k.send(pickle.dumps(['EC', 'Success']))
+
+    @staticmethod
+    def record_partition(k, r):
+        """ TODO: Finish the documentation here.
+
+        :param k:
+        :param r:
+        :return:
+        """
+        f, r_d, numnodes = r[1:4]
+
+        # Connect to SQLite database using the filename.
+        conn = sql.connect(f)
+        cur = conn.cursor()
+
+        try:
+            # Range partitioning has been specified. Create the appropriate entries.
+            if r_d['partmtd'] == 1:
+                for i in range(1, numnodes + 1):
+                    cur.execute('UPDATE dtables SET partcol = ?, partparam1 = ?, partparam2 = ?, '
+                                'partmtd = 1 WHERE nodeid = ? AND tname = ?',
+                                (r_d['partcol'], r_d['param1'][i - 1], r_d['param2'][i - 1],
+                                 i, r_d['tname']))
+
+            # Hash partitioning has been specified. Create the appropriate entries.
+            elif r_d['partmtd'] == 2:
+                for i in range(1, numnodes + 1):
+                    cur.execute('UPDATE dtables SET partcol = ?, partparam1 = ?, partmtd = 2 '
+                                'WHERE nodeid = ? AND tname = ?',
+                                (r_d['partcol'], r_d['param1'], i, r_d['tname']))
+        except sql.Error as e:
+            k.send(pickle.dumps(str(e))), conn.rollback(), conn.close()
+
+        # No errors have occured. Send the success message.
+        conn.commit(), conn.close()
+        k.send(pickle.dumps(['EK', 'Success']))
+
+    @staticmethod
+    def return_node_uris(k, r):
+        """ TODO: Finish this documentation.
+
+        :param k:
+        :param r:
+        :return:
+        """
+        f, tname = r[1:3]
+
+        # Connect to SQLite database using the filename.
+        conn = sql.connect(f)
+        cur = conn.cursor()
+
+        # Grab the node URIs belonging to the given table. Return the results.
+        try:
+            p = cur.execute('SELECT nodeurl FROM dtables WHERE tname = ?', (tname,)).fetchall()
+            k.send(pickle.dumps('Table ' + tname + ' not found.' if len(p) == 0 else ['EU', p]))
+            conn.close()
+        except sql.Error as e:
+            k.send(pickle.dumps(str(e))), conn.rollback(), conn.close()
+
+
+class RemoteCatalog:
+    """ All catalog operations on general nodes (i.e. calls the catalog node). """
+
+    @staticmethod
+    def ping(c):
+        """ Given information about the catalog node, check if a connection is possible to the
+        catalog node.
+
+        :param c: The value of the key-value pair inside clustercfg.
+        :return: True if a connection can be achieved. False otherwise.
+        """
+        host, port = c.split(':', 1)
+        port = port.split('/', 1)[0]
+
+        # Create our socket and attempt to connect.
         sock = socket.socket()
-        sock.connect((host, int(port)))
-    except OSError:
+        try:
+            sock.connect((host, int(port)))
+        except OSError:
+            sock.close()
+            return False
+
         sock.close()
-        return False
+        return True
 
-    sock.close()
-    return True
+    @staticmethod
+    def record_ddl(catalog_uri, success_nodes, ddl):
+        """ Given information about the cluster and the DDL statement to execute, lookup the
+        location of the catalog node and pass the request there.
 
-def verify_node_count(c, tname, n):
-    """ TODO: Finish this description.
+        :param catalog_uri: The URI associated with the catalog.
+        :param success_nodes: List containing the URIs of the successfully executed nodes.
+        :param ddl: DDL statement to pass to the catalog node.
+        :return The resulting error if the appropriate response is not returned successfully. True
+        otherwise.
+        """
+        host, port = catalog_uri.split(':', 1)
+        port, f = port.split('/', 1)
 
-    :param c:
-    :param tname:
-    :param n:
-    :return:
-    """
-    host, port = c.split(':')
-    port = port.split('/')[0]
-
-    # Create our socket and attempt to connect.
-    try:
+        # Create our socket.
         sock = socket.socket()
-        sock.connect((host, int(port)))
-    except OSError:
+        try:
+            sock.connect((host, int(port)))
+        except OSError:
+            sock.close()
+            return 'Socket could not be established.'
+
+        # Pickle our command list ('C', cluster, and DDL), and send our message.
+        sock.send(pickle.dumps(['C', f, success_nodes, ddl]))
+
+        # Wait for a response to be sent back, and return this response.
+        response = sock.recv(4096)
+        r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
         sock.close()
-        return ''
 
-    # Grab the number of nodes in the given table (maximum of nodeid).
-    # TODO: Finish grabbing MAX(nodeid).
+        # String response indicates an error. Return this.
+        if isinstance(r, str):
+            return r
+        elif r[0] == 'EC' and r[1] == 'Success':
+            return True
 
-    # Return true if n matches the number we just found. Otherwise false.
+    @staticmethod
+    def return_node_uris(catalog, tname):
+        """ TODO: Finish the documentation here.
 
-def node_uris(c):
-    """ Given the URI of the catalog node, grab all of the node URIs in the cluster.
+        :param catalog:
+        :param tname:
+        :return:
+        """
+        host, port = catalog.split(':', 1)
+        port, f = port.split('/', 1)
 
-    :param c: The URI (value of the key-value) pair inside clustercfg of the catalog node.
-    :return: False if a connection cannot be achieved. Otherwise, a list of all node URIs in the
-    cluster in sequential order.
-    """
-    host, port = c.split(':')
-    port = port.split('/')[0]
-
-    # Create our socket and attempt to connect.
-    try:
+        # Create our socket.
         sock = socket.socket()
-        sock.connect((host, int(port)))
-    except OSError:
+        try:
+            sock.connect((host, int(port)))
+        except OSError:
+            sock.close()
+            return 'Socket could not be established.'
+
+        # Pickle our command list ('U', filename, and tname), and send our message.
+        sock.send(pickle.dumps(['U', f, tname]))
+
+        # Wait for a response to be sent back, and record this response.
+        response = sock.recv(4096)
+        r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
         sock.close()
-        return False
 
-    # TODO: Finish collecting node URIs here.
+        # A list returned indicates the message was successful. Flatten the returned list.
+        if r[0] == 'EU':
+            return [x[0] for x in r[1]]
+        else:
+            # Otherwise, an error exists. Return the error.
+            return r
 
+    @staticmethod
+    def update_partition(catalog, r_d, numnodes):
+        """ TODO: Finish the documentation here.
 
-def create_table_local(f):
-    """ Given the name of the database file, create the table. This information is specified in
-    the homework assignment.
+        :param catalog:
+        :param r_d:
+        :param numnodes:
+        :return:
+        """
+        host, port = catalog.split(':', 1)
+        port, f = port.split('/', 1)
 
-    :param f: Location of the database file to store this table on.
-    :return: None.
-    """
-    conn = sql.connect(f)
-
-    cur = conn.cursor()
-    cur.execute('CREATE TABLE IF NOT EXISTS dtables ('
-                'tname CHARACTER(32), '
-                'nodedriver CHARACTER(64), '
-                'nodeurl CHARACTER(128), '
-                'nodeuser  CHARACTER(16), '
-                'nodepasswd  CHARACTER(16), '
-                'partmtd INT, '
-                'nodeid INT, '
-                'partcol CHARACTER(32), '
-                'partparam1 CHARACTER(128), '
-                'partparam2 CHARACTER(128)); ')
-
-
-def log_remote(cluster, s):
-    """ Given information about the cluster and the DDL statement to execute, lookup the location
-    of the catalog node and pass the request there.
-
-    :param cluster: List containing the catalog node URI, and a list of cluster node URIs.
-    :param s: DDL statement to pass to the catalog node.
-    :return: False if the remote cluster node does not perform the operation successfully. True
-    otherwise.
-    """
-    host, port = cluster[0].split(':')
-    port = port.split('/')[0]
-
-    # Create our socket.
-    try:
+        # Create our socket.
         sock = socket.socket()
-        sock.connect((host, int(port)))
-    except OSError:
-        sock.close()
-        return False
+        try:
+            sock.connect((host, int(port)))
+        except OSError:
+            sock.close()
+            return 'Socket could not be established.'
 
-    # Pickle our command list ('C', cluster, and DDL), and send our message.
-    sock.send(pickle.dumps(['C', cluster, s]))
+        # Pickle our command list ('K', f, r_d, numnodes), and send our message.
+        sock.send(pickle.dumps(['K', f, r_d, numnodes]))
+        response = sock.recv(4096)
+        try:
+            r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
+        except EOFError as e:
+            return str(e)
 
-    # Wait for a response to be sent back, and return this response.
-    response = sock.recv(4096)
-    r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
-
-    if r != 'Success':
-        sock.close()
-        return False
-
-    # Return true if there are no hiccups.
-    sock.close()
-    return True
-
-
-def log_local(k, cluster, s):
-    """ Given node URIs of the cluster and the DDL statement to execute, insert metadata
-    about which nodes and which tables are affected.
-
-    :param k: Socket connection to send response through.
-    :param cluster: List containing the catalog node URI, and a list of cluster node URIs.
-    :param s: The SQL being executed.
-    :return: None.
-    """
-    f = cluster[0].split('/')[1]
-
-    # Connect to SQLite database using the filename.
-    conn = sql.connect(f)
-    cur = conn.cursor()
-    create_table_local(f)
-
-    # Determine the table being operated on in the DDL.
-    table = dissect.table(s)
-    if table is False:
-        k.send(pickle.dumps('No table found. SQL statement formatted incorrectly.'))
-        return
-
-    # Assemble our tuples and perform the insertion.
-    try:
-        tuples = [(table, cluster[i + 1], i + 1) for i in range(len(cluster[1]))]
-        cur.executemany('INSERT INTO dtables VALUES (?, NULL, ?, NULL, NULL, NULL, ?, NULL, '
-                        'NULL, NULL)', tuples)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e))), conn.rollback(), conn.close()
-        return
-
-    # No error exists. Commit and send the success message.
-    conn.commit(), conn.close()
-    k.send(pickle.dumps('Success'))
+        # String response indicates an error. Return this.
+        if isinstance(r, str):
+            return str(r)
+        elif r[0] == 'EK' and r[1] == 'Success':
+            return True

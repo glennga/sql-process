@@ -17,8 +17,8 @@ import socket
 import sys
 from threading import Thread
 
-import catalog
-import dissect
+from catalog import RemoteCatalog
+from dissect import ClusterCFG, SQLFile
 
 # Used to store the node IDs of each **successful** execution.
 successful_nodes = []
@@ -33,8 +33,8 @@ def execute_ddl(node, name, s):
     :param s: DDL statement to run on the node.
     :return None.
     """
-    host, sock, n = node.split(':')[0], '', name.split('.')[0].split('node')[1]
-    port, f = (node.split(':')[1]).split('/')
+    host, sock, n = node.split(':', 1)[0], '', name.split('.', 1)[0].split('node')[1]
+    port, f = (node.split(':', 1)[1]).split('/', 1)
 
     # Create our socket.
     try:
@@ -49,10 +49,10 @@ def execute_ddl(node, name, s):
 
     # Wait for a response to be sent back, and return the response.
     response = sock.recv(4096)
-    r = pickle.loads(response) if response != '' else 'Failed to receive response.'
+    r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
 
     # Display the error, and append to the success IDs list if appropriate.
-    if hasattr(r, '__iter__') and r[0] == 'EZ' and r[1] == 'Success':
+    if r[0] == 'EZ' and r[1] == 'Success':
         print('Successful Execution on Node: ' + n), successful_nodes.append(int(n))
     else:
         print('Error on Node ' + n + ': ' + r)
@@ -63,29 +63,36 @@ def execute_ddl(node, name, s):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 runDDL.py [clustercfg] [ddlfile]')
-        exit(2)
+        print('Usage: python3 runDDL.py [clustercfg] [ddlfile]'), exit(2)
 
-    # TODO: Recreate clustercfg_ddl here.
-    # Parse both the clustercfg and ddlfile. Ensure that both are properly formatted.
-    c, s = dissect.clustercfg_ddl(sys.argv[1]), dissect.sqlfile(sys.argv[2])
-    if isinstance(c, str) or not c:
-        print(c), exit(3)
-    elif not s:
-        print('There exists no terminating semicolon in "ddlfile". No statement executed.'), exit(4)
+    # Collect the catalog node URI and the DDL file.
+    c_r, s_r = ClusterCFG.catalog_uri(sys.argv[1]), SQLFile.as_string(sys.argv[2])
+    if isinstance(c_r, str):
+        print('Error: ' + c_r), exit(3)
+    elif isinstance(s_r, str):
+        print('Error: ' + s_r), exit(4)
+    catalog_uri, s = c_r[0], s_r[0]
 
     # Test our connection to the catalog. Do not execute if logging cannot occur.
-    if not catalog.is_connect(c[0]):
-        print('Cannot connect to the catalog. No statement executed.'), exit(5)
+    if not RemoteCatalog.ping(catalog_uri):
+        print('Error: Cannot connect to the catalog. No statement executed.'), exit(5)
+
+    # Collect our node URIs. Do not proceed if these are not valid.
+    node_uris = ClusterCFG.node_uris(sys.argv[1])
+    if isinstance(node_uris, str):
+        print('Error: ' + node_uris), exit(6)
 
     # For every node in the cluster dictionary, execute the given statement and display any errors.
     threads = []
-    for i, node in enumerate(c[1]):
+    for i, node in enumerate(node_uris):
         threads.append(Thread(target=execute_ddl, args=(node, 'node' + str(i + 1), s)))
         threads[i].start()
 
     # Wait until threads are finished. Update the metadata on the catalog node.
     [b.join() for b in threads]
-    if not catalog.log_remote([c[0], [e for i, e in enumerate(c[1])
-                                      if (i + 1) in successful_nodes]], s):
-        print('Logging to catalog failed. '), exit(6)
+    r_c = RemoteCatalog.record_ddl(catalog_uri, [e for i, e in enumerate(node_uris)
+                                                 if (i + 1) in successful_nodes], s)
+    if isinstance(r_c, str):
+        print('Catalog Error: ' + r_c), exit(7)
+    elif len(successful_nodes) > 0:
+        print('Catalog Node Update Successful.')
