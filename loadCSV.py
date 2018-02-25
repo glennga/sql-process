@@ -1,7 +1,8 @@
 # coding=utf-8
 """
 Given a CSV of tuples and a configuration file of the partitioning, insert the tuples into the
-cluster. An assumption is made that the CSV is valid (CSV must arrive from a reputable source).
+cluster. An assumption is made that the CSV is valid, and does not contain any SQL injections (CSV
+must arrive from a reputable source).
 
 Usage: python loadCSV.py [clustercfg] [csv]
 
@@ -43,61 +44,64 @@ def create_socket(n_i):
     return sock, f
 
 
-def send_insert(k, s, f, ell):
+def send_insert(k, s_l, p_l, f):
     """ Construct the appropriate command list and send this over the given socket.
 
     :param k: Socket to send command list through.
-    :param s: To-be-prepared SQL string to execute on the node.
+    :param s_l: List of prepared SQL strings to execute on the node.
+    :param p_l: List of parameters to attach to SQL strings when executing on the node.
     :param f: Database filename to record to.
-    :param ell: Tuples to attach to SQL string.
     :return: String containing the error if an error occurred on the node. Otherwise, true.
     """
-    # Send our command.
-    k.send(pickle.dumps(['E', f, s, ell]))
+    # Send our command. Only perform for non-empty entries.
+    for i, s, p in zip([x for x in range(len(s_l))], s_l, p_l):
+        if len(s) != 0 or len(p) != 0:
+            k.send(pickle.dumps(['YS' if i != (len(s_l) - 1) else 'YZ', f, s, p]))
+            response = k.recv(4096)
+            try:
+                r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
+            except EOFError as e:
+                return str(e)
 
-    # Receive our response.
-    response = k.recv(4096)
-    try:
-        r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
-    except EOFError as e:
-        return str(e)
+            # String response indicates an error. Return this.
+            if isinstance(r, str):
+                return r
+            elif r[0] == 'EY' and r[1] == 'Success' and i == len(s_l) - 1:
+                return True
 
-    # String response indicates an error. Return this.
-    if isinstance(r, str):
-        return r
-    elif r[0] == 'EZ' and r[1] == 'Success':
-        return True
+        elif i == len(s_l) - 1:
+            # We have reached the end of our list but have nothing to send.
+            k.send(pickle.dumps(['YY']))
+            response = k.recv(4096)
+            try:
+                r = pickle.loads(response) if response != b'' else 'Failed to receive response.'
+                if isinstance(r, str):
+                    return r
+            except EOFError as e:
+                return str(e)
+
+            # The operation above was successful. Return true.
+            return True
 
 
-def send_insert_selective(s_l, sock_f):
+def send_insert_selective(s_l, p_l, sock_f):
     """ Construct the appropriate command list for a list of SQL strings, sockets, & files,
     and send them to each node iff an insert is to actually occur (invalid SQL strings come from
     partitioned nodes that don't perform inserts).
 
-    :param s_l: List of to-be-prepared SQL strings.
+    :param s_l: List of prepared SQL strings.
+    :param p_l: List of parameters to attach the SQL strings.
     :param sock_f: List of lists of sockets (first element) and database filenames (second element).
     :return: False if there exists errors on any nodes. True otherwise.
     """
     is_error_free = True
 
-    # Finalize the insertion string. Remove if the current node does not insert anything.
-    removed = []
-    for i, s_t in enumerate(s_l):
-        if s_t[0][0] == 'INSERT INTO ' + r_d['tname'] + ' VALUES ':
-            removed.append(i)
-        else:
-            s_t[0] = s_t[0][0][:-1]
-            s_t[0] += ';'
-
     # Perform the insertion for each node in the cluster that has a valid insertion statement.
     for i, sock_f_i in enumerate(sock_f):
-        if i not in removed:
-            # List must be flattened beforehand.
-            response = send_insert(sock_f_i[0], s_l[i][0], sock_f_i[1],
-                                   [x for sublist in s_l[i][1] for x in sublist])
-            if isinstance(response, str):
-                print('Error on Node ' + str(i) + ': ' + response)
-                is_error_free = False
+        response = send_insert(sock_f_i[0], s_l[i], p_l[i], sock_f_i[1])
+        if isinstance(response, str):
+            print('Error on Node ' + str(i) + ': ' + response)
+            is_error_free = False
 
     # Operation was successful, return true.
     return is_error_free
@@ -122,21 +126,18 @@ def nopart_load(n, c, r_d, f):
     csv_l = []
     with open(f) as csv_f:
         [csv_l.append(x) for x in csv.reader(csv_f)]
+    s_l, p_l = [[] for _ in csv_l], [[] for _ in csv_l]
 
-    # Construct the insertion string.
-    s = 'INSERT INTO ' + r_d['tname'] + ' VALUES '
-    for ell in csv_l:
+    # Construct a list of insertion strings.
+    for i, ell in enumerate(csv_l):
         if len(ell) != 0:
-            s += '('
-            s += ''.join(['?,' for _ in range(len(ell) - 1)])
-            s += '?),'
-    s = s[:-1]
-    s += ';'
+            s_l[i] = 'INSERT INTO ' + r_d['tname'] + ' VALUES '
+            s_l[i] += '(' + ''.join(['?, ' for _ in range(len(ell) - 1)]) + '?);'
+            p_l[i] = ell
 
     # Perform the insertion for each node in the cluster. List must be flattened beforehand.
     for i, sock_f_i in enumerate(sock_f):
-        response = send_insert(sock_f_i[0], s, sock_f_i[1],
-                               [x for sublist in csv_l for x in sublist])
+        response = send_insert(sock_f_i[0], s_l, p_l, sock_f_i[1])
 
         if isinstance(response, str):
             print('Error on Node ' + str(i) + ': ' + response)
@@ -145,6 +146,13 @@ def nopart_load(n, c, r_d, f):
     # Close all sockets.
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
     print('Insertion was ' + ('successful.' if is_error_free else 'not successful.'))
+
+    # Update the partition information in the catalog node.
+    response_p = RemoteCatalog.update_partition(c, r_d, len(n))
+    if isinstance(response_p, str):
+        print('Catalog Error: ' + response_p)
+    else:
+        print('Catalog node has been updated with the partitions.')
 
 
 def hashpart_load(n, c, r_d, f):
@@ -164,9 +172,8 @@ def hashpart_load(n, c, r_d, f):
         return
 
     # For each node in the node URIs, construct a socket.
-    h, s_l = lambda b: (b % p) + 1, [[[], []] for _ in n]
+    h = lambda b: (b % p) + 1
     sock_f = list(map(lambda x: create_socket(x), n))
-    [s_t[0].append('INSERT INTO ' + r_d['tname'] + ' VALUES ') for s_t in s_l]
     if not all(sock_f):
         print('All nodes in cluster could not be reached.'), exit(7)
 
@@ -178,16 +185,22 @@ def hashpart_load(n, c, r_d, f):
         return
 
     # Read every line of the CSV.
+    csv_l = []
     with open(f) as csv_f:
-        for line in csv.reader(csv_f):
-            s_l[h(int(line[y])) - 1][0][0] += '('
-            s_l[h(int(line[y])) - 1][0][0] += ''.join(['?,' for _ in range(len(line) - 1)])
-            s_l[h(int(line[y])) - 1][0][0] += '?),'
-            s_l[h(int(line[y])) - 1][1].append(line)
+        [csv_l.append(x) for x in csv.reader(csv_f)]
+    s_l, p_l = [[[] for _ in csv_l] for q in n], [[[] for _ in csv_l] for q in n]
+
+    # Construct a list of insertion strings.
+    for i, ell in enumerate(csv_l):
+        if len(ell) != 0:
+            h_ell = h(int(ell[y])) - 1
+            s_l[h_ell][i] = 'INSERT INTO ' + r_d['tname'] + ' VALUES '
+            s_l[h_ell][i] += '(' + ''.join(['?, ' for _ in range(len(ell) - 1)]) + '?);'
+            p_l[h_ell][i] = ell
 
     # Insert the data into their respective nodes.
-    print('Insertion was ' + ('successful.' if
-    send_insert_selective(s_l, sock_f) else 'not successful.'))
+    b = send_insert_selective(s_l, p_l, sock_f)
+    print('Insertion was ' + ('successful.' if b else 'not successful.'))
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.
@@ -209,9 +222,8 @@ def rangepart_load(n, c, r_d, f):
     :return: None.
     """
     # For each node in the node URIs, construct a socket.
-    r_bounds, s_l = list(zip(r_d['param1'], r_d['param2'])), [[[], []] for _ in n]
+    r_bounds = list(zip(r_d['param1'], r_d['param2']))
     sock_f = list(map(lambda x: create_socket(x), n))
-    [s_t[0].append('INSERT INTO ' + r_d['tname'] + ' VALUES ') for s_t in s_l]
     if not all(sock_f):
         print('All nodes in cluster could not be reached.'), exit(7)
 
@@ -228,18 +240,23 @@ def rangepart_load(n, c, r_d, f):
         return
 
     # Read every line of the CSV.
+    csv_l = []
     with open(f) as csv_f:
-        for line in csv.reader(csv_f):
-            for i, bounds in enumerate(r_bounds):
-                if bounds[0] < int(line[y]) <= bounds[1]:
-                    s_l[i][0][0] += '('
-                    s_l[i][0][0] += ''.join(['?,' for _ in range(len(line) - 1)])
-                    s_l[i][0][0] += '?),'
-                    s_l[i][1].append(line)
+        [csv_l.append(x) for x in csv.reader(csv_f)]
+    s_l, p_l = [[[] for _ in csv_l] for q in n], [[[] for _ in csv_l] for q in n]
+
+    # Construct a list of insertion strings.
+    for i, ell in enumerate(csv_l):
+        if len(ell) != 0:
+            for j, bounds in enumerate(r_bounds):
+                if bounds[0] < int(ell[y]) <= bounds[1]:
+                    s_l[j][i] = 'INSERT INTO ' + r_d['tname'] + ' VALUES '
+                    s_l[j][i] += '(' + ''.join(['?, ' for _ in range(len(ell) - 1)]) + '?);'
+                    p_l[j][i] = ell
 
     # Insert the data into their respective nodes.
     print('Insertion was ' + ('successful.' if
-    send_insert_selective(s_l, sock_f) else 'not successful.'))
+    send_insert_selective(s_l, p_l, sock_f) else 'not successful.'))
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.

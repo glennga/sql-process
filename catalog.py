@@ -33,7 +33,6 @@ class LocalCatalog:
         :return: None.
         """
         conn = sql.connect(f)
-
         cur = conn.cursor()
         cur.execute('CREATE TABLE IF NOT EXISTS dtables ('
                     'tname CHARACTER(32), '
@@ -60,7 +59,11 @@ class LocalCatalog:
         f, node_uris, ddl = r[1:4]
 
         # Connect to SQLite database using the filename.
-        conn = sql.connect(f)
+        try:
+            conn = sql.connect(f)
+        except sql.Error as e:
+            k.send(pickle.dumps(str(e)))
+            return
         cur = conn.cursor()
         LocalCatalog.create_dtable(f)
 
@@ -107,10 +110,20 @@ class LocalCatalog:
         f, r_d, numnodes = r[1:4]
 
         # Connect to SQLite database using the filename.
-        conn = sql.connect(f)
+        try:
+            conn = sql.connect(f)
+        except sql.Error as e:
+            k.send(pickle.dumps(str(e)))
+            return
         cur = conn.cursor()
 
         try:
+            # No partitioning has been specified. Create the appropriate entries.
+            if r_d['partmtd'] == 0:
+                for i in range(1, numnodes + 1):
+                    cur.execute('UPDATE dtables SET partmtd = 0 WHERE nodeid = ? AND tname = ?',
+                                (i, r_d['tname']))
+
             # Range partitioning has been specified. Create the appropriate entries.
             if r_d['partmtd'] == 1:
                 for i in range(1, numnodes + 1):
@@ -144,12 +157,15 @@ class LocalCatalog:
         """
         f, tname = r[1:3]
 
-        # Connect to SQLite database using the filename.
-        conn = sql.connect(f)
-        cur = conn.cursor()
-
         # Grab the node URIs belonging to the given table. Return the results.
         try:
+            try:
+                conn = sql.connect(f)
+            except sql.Error as e:
+                k.send(pickle.dumps(str(e)))
+                return
+            cur = conn.cursor()
+
             p = cur.execute('SELECT nodeurl FROM dtables WHERE tname = ?', (tname,)).fetchall()
             k.send(pickle.dumps('Table ' + tname + ' not found.' if len(p) == 0 else ['EU', p]))
             conn.close()
@@ -260,8 +276,7 @@ class RemoteCatalog:
 
         :param catalog: The URI associated with the catalog.
         :param r_d: Dictionary containing partitioning entries.
-        :param numnodes: Number of nodes associated with the cluster (only required for hash and
-            range partitioning).
+        :param numnodes: Number of nodes associated with the cluster.
         :return: The resulting error if the appropriate response is notreturned successfully.
             Otherwise, true.
         """

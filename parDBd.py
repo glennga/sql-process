@@ -3,7 +3,10 @@
 Listens for a command list to be sent to the given port, and returns a command response list
 through that same port. Given an operation code OP, the following occurs:
 
-OP : 'E' -> Execute a SQL statement and return tuples if applicable.
+OP : 'YS' -> Execute an insertion SQL statement, and wait for additional statements.
+   : 'YZ' -> Execute a SQL statement, and don't wait for additional statements.
+   : 'YY' -> Don't execute a SQL statement, and don't wait for additional statements.
+   : 'E' -> Execute a SQL statement and return tuples if applicable.
    : 'C' -> Record a DDL to the catalog database.
    : 'K' -> Record partitioning information to the catalog database.
    : 'U' -> Lookup the node URIs on the catalog database and return these.
@@ -24,15 +27,62 @@ from catalog import LocalCatalog
 from dissect import SQLFile
 
 
+def insert_on_db(k, r):
+    """ Perform the given insertion SQL operation on the passed database. Wait for the
+    terminating 'YZ' and 'YY' operation codes.
+
+    :param k: Socket connection to send response through.
+    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :return: None.
+    """
+    f, s, tup, r_i = r[1], r[2], r[3], r
+    try:
+        conn = sql.connect(f)
+    except sql.Error as e:
+        k.send(pickle.dumps(str(e)))
+        return
+    cur = conn.cursor()
+
+    # Wait for the terminating operation codes.
+    while True:
+        # Execute the command. Return the error if any exist.
+        try:
+            cur.execute(s, tup)
+            k.send(pickle.dumps(['EY', 'Success']))
+            r_i = pickle.loads(k.recv(4096))
+
+            # Do not proceed if 'YY' (stop waiting, don't execute) operation code is passed.
+            if r_i[0] == 'YY':
+                break
+            elif r_i[0] == 'YZ':
+                cur.execute(r_i[2], r_i[3])
+                k.send(pickle.dumps(['EY', 'Success']))
+                break
+            else:
+                f, s, tup = r_i[1], r_i[2], r_i[3]
+
+        except (sql.Error, EOFError) as e:
+            k.send(pickle.dumps(str(e)))
+
+    # Otherwise, no error exists. Commit our changes and close our connection.
+    conn.commit(), conn.close()
+    k.send(pickle.dumps(['EY', 'Success']))
+
+
 def execute_on_db(k, r):
-    """ Insert the given response string to a database file.
+    """ Perform the given SQL operation on the passed database. Return any tuples if the
+    statement is a SELECT statement.
 
     :param k: Socket connection to send response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
     f, s, result = r[1], r[2], []
-    conn = sql.connect(f)
+    try:
+        conn = sql.connect(f)
+    except sql.Error as e:
+        k.send(pickle.dumps(str(e)))
+        return
     cur = conn.cursor()
 
     # Execute the command. Return the error if any exist.
@@ -40,8 +90,6 @@ def execute_on_db(k, r):
         # Support for prepared statements, dependent on the length of the input array.
         if len(r) == 3:
             result = cur.execute(s).fetchall()
-        elif len(r) == 4:
-            result = cur.execute(s, tuple(r[3])).fetchall()
         else:
             k.send(pickle.dumps('Incorrect number of items sent to socket.'))
     except sql.Error as e:
@@ -70,7 +118,11 @@ def return_columns(k, r):
     :return: None.
     """
     f, tname, col = r[1], r[2], []
-    conn = sql.connect(f)
+    try:
+        conn = sql.connect(f)
+    except sql.Error as e:
+        k.send(pickle.dumps(str(e)))
+        return
     cur = conn.cursor()
 
     # Execute the command. Return the error if any exist.
@@ -89,7 +141,7 @@ def return_columns(k, r):
 def interpret(k, r):
     """ Given a socket and a message through the socket, interpret the message. The result should
     be a list of length greater than 1, and the first element should be in the space ['E', 'C',
-    'U', 'P', 'K'].
+    'U', 'P', 'K', 'YS']. 'YZ' and 'YY' are only valid after being initially passed 'YS'.
 
     :param k: Socket connection pass response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
@@ -101,7 +153,10 @@ def interpret(k, r):
         k.send(pickle.dumps('Input not an list.')), k.close()
         return
 
-    if r[0] == 'E':
+    if r[0] == 'YS':
+        # Execute multiple insertion operations on a database.
+        insert_on_db(k, r)
+    elif r[0] == 'E':
         # Execute an operation on a database.
         execute_on_db(k, r)
     elif r[0] == 'C':
@@ -140,19 +195,12 @@ if __name__ == '__main__':
         k, addr = sock.accept()
 
         try:
-            # Retrieve the sent data (store everything in a buffer). Unpickle the data.
-            buf, r = b'', k.recv(4096)
-            buf += r
-            while len(r) != 0:
-                r = k.recv(4096)
-                buf += r
-
-            # Interpret the command.
-            interpret(k, pickle.loads(buf))
+            # Retrieve the sent data. Unpickle the data. Interpret the command.
+            interpret(k, pickle.loads(k.recv(4096)))
         except EOFError as e:
             k.send(pickle.dumps(str(e)))
         except ConnectionResetError as e:
-            # Ignore when a connection is forcibly closed.
+            # Ignore when a connection is forcibly closed, or the socket has timed out.
             pass
 
         k.close()
