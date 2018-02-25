@@ -18,7 +18,12 @@ For client programs that load a CSV file onto several machines using a specified
 ## Getting Started
 1. To get started, all nodes in your cluster should have `python3` and `git`. To access your data outside of Python, install `sqlite3` as well:
     ```
-    apt-get install -y python3 git sqlite3
+    apt-get install -y python3 python3-pip git sqlite3
+    ```
+2. Install `antlr4` and `configparser` for Python.
+    ```
+    pip3 install antlr4-python3-runtime
+    pip3 install configparser
     ```
 2. With all of these installed, clone this repository onto your client and every node in your cluster.
     ```

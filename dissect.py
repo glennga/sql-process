@@ -14,7 +14,6 @@ Usage: SQLFile.as_string([SQL file])
 """
 
 from configparser import ConfigParser
-from math import inf
 
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
 
@@ -200,7 +199,8 @@ class ClusterCFG:
             formatted. Otherwise, the partitioning dictionary with the additional partitioning
             information.
         """
-        inf_a = lambda b: inf if b == '+inf' else (-inf if b == '-inf' else float(b))
+        inf_a = lambda b: float('inf') if b == '+inf' else \
+            (-float('inf') if b == '-inf' else float(b))
 
         try:
             if p_m.lower() == 'range':
