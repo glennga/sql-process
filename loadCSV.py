@@ -110,7 +110,7 @@ def nopart_load(n, c, r_d, f):
     :param n: List of node URIs.
     :param c: Catalog node URI.
     :param r_d: Dictionary of partitioning information.
-    :param f: List of node filenames, indexed the same as 'n'.
+    :param f: Name of the CSV file.
     :return: None.
     """
     # For each node in the node URIs, construct a socket.
@@ -144,7 +144,7 @@ def nopart_load(n, c, r_d, f):
 
     # Close all sockets.
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-    print('Insertion was ' + 'successful.' if not is_error_free else 'not successful.')
+    print('Insertion was ' + 'successful.' if is_error_free else 'not successful.')
 
 
 def hashpart_load(n, c, r_d, f):
@@ -154,7 +154,7 @@ def hashpart_load(n, c, r_d, f):
     :param n: List of node URIs.
     :param c: Catalog node URI.
     :param r_d: Dictionary of partitioning information.
-    :param f: List of node filenames, indexed the same as 'n'.
+    :param f: Name of the CSV file.
     :return: None.
     """
     try:
@@ -186,7 +186,7 @@ def hashpart_load(n, c, r_d, f):
             s_l[h(int(line[y])) - 1][1].append(line)
 
     # Insert the data into their respective nodes.
-    print('Insertion was ' + 'successful.' if not
+    print('Insertion was ' + 'successful.' if
     send_insert_selective(s_l, sock_f) else 'not successful.')
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
@@ -205,7 +205,7 @@ def rangepart_load(n, c, r_d, f):
     :param n: List of node URIs.
     :param c: Catalog node URI.
     :param r_d: Dictionary of partitioning information.
-    :param f: List of node filenames, indexed the same as 'n'.
+    :param f: Name of the CSV file.
     :return: None.
     """
     # For each node in the node URIs, construct a socket.
@@ -238,7 +238,7 @@ def rangepart_load(n, c, r_d, f):
                     s_l[i][1].append(line)
 
     # Insert the data into their respective nodes.
-    print('Insertion was ' + 'successful.' if not
+    print('Insertion was ' + 'successful.' if
     send_insert_selective(s_l, sock_f) else 'not successful.')
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 

@@ -139,12 +139,15 @@ if __name__ == '__main__':
         sock.listen(1)
         k, addr = sock.accept()
 
-        # Retrieve the sent data. Unpickle the data.
         try:
-            r = pickle.loads(k.recv(4096))
+            # Retrieve the sent data (store everything in a buffer). Unpickle the data.
+            buffer, r = b'', k.recv(4096)
+            while r:
+                buffer += r
+                r = k.recv(4096)
 
             # Interpret the command.
-            interpret(k, r)
+            interpret(k, pickle.loads(buffer))
         except EOFError as e:
             k.send(pickle.dumps(str(e)))
         except ConnectionResetError as e:

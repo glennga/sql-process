@@ -79,7 +79,7 @@ class LocalCatalog:
                                 (table,)).fetchone()
 
                 # If the table exists, delete all entries before performing the insertion.
-                if len(e) != 0:
+                if e is not None:
                     cur.execute('DELETE FROM dtables WHERE tname = ?', (table,))
 
                 tuples = [(table, node_uris[i], i + 1) for i in range(len(node_uris))]
