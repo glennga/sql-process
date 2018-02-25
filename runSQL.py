@@ -17,6 +17,7 @@ import ctypes
 import pickle
 import socket
 import sys
+import os
 from multiprocessing import Process, Array
 from subprocess import call
 
@@ -118,7 +119,8 @@ if __name__ == '__main__':
 
     # If the given SQL is a DDL, call 'runDDL' instead.
     if SQLFile.is_ddl(s):
-        call(['python', 'runDDL.py', sys.argv[1], sys.argv[2]]), exit(0)
+        call(['python' + ('3' if (os.name != 'nt') else ''), 'runDDL.py',
+              sys.argv[1], sys.argv[2]]), exit(0)
 
     # Determine the working table.
     t_table = SQLFile.table(s)
