@@ -141,13 +141,14 @@ if __name__ == '__main__':
 
         try:
             # Retrieve the sent data (store everything in a buffer). Unpickle the data.
-            buffer, r = b'', k.recv(4096)
-            while r:
-                buffer += r
+            buf, r = b'', k.recv(4096)
+            buf += r
+            while len(r) != 0:
                 r = k.recv(4096)
+                buf += r
 
             # Interpret the command.
-            interpret(k, pickle.loads(buffer))
+            interpret(k, pickle.loads(buf))
         except EOFError as e:
             k.send(pickle.dumps(str(e)))
         except ConnectionResetError as e:

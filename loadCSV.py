@@ -144,7 +144,7 @@ def nopart_load(n, c, r_d, f):
 
     # Close all sockets.
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-    print('Insertion was ' + 'successful.' if is_error_free else 'not successful.')
+    print('Insertion was ' + ('successful.' if is_error_free else 'not successful.'))
 
 
 def hashpart_load(n, c, r_d, f):
@@ -186,8 +186,8 @@ def hashpart_load(n, c, r_d, f):
             s_l[h(int(line[y])) - 1][1].append(line)
 
     # Insert the data into their respective nodes.
-    print('Insertion was ' + 'successful.' if
-    send_insert_selective(s_l, sock_f) else 'not successful.')
+    print('Insertion was ' + ('successful.' if
+    send_insert_selective(s_l, sock_f) else 'not successful.'))
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.
@@ -238,8 +238,8 @@ def rangepart_load(n, c, r_d, f):
                     s_l[i][1].append(line)
 
     # Insert the data into their respective nodes.
-    print('Insertion was ' + 'successful.' if
-    send_insert_selective(s_l, sock_f) else 'not successful.')
+    print('Insertion was ' + ('successful.' if
+    send_insert_selective(s_l, sock_f) else 'not successful.'))
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.
