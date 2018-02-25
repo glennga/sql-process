@@ -3,7 +3,15 @@
 Contains functions to manage the catalog table, locally (client side requests) and remotely (server
 side actions).
 
-Usage: TODO: Update the usage document.
+Usage: LocalCatalog.create_dtable([catalog database filename])
+       LocalCatalog.record_ddl([socket], [command list])
+       LocalCatalog.record_partition([socket], [command list])
+       LocalCatalog.return_node_uris([socket], [command list])
+
+       RemoteCatalog.ping([catalog node URI])
+       RemoteCatalog.record_ddl([catalog node URI], [successful node URIs], [executed DDL])
+       RemoteCatalog.return_node_uris([catalog node URI], [table name])
+       RemoteCatalog.update_partition([catalog node URI], [partition dictionary], [number of nodes])
 """
 
 import pickle
@@ -46,7 +54,7 @@ class LocalCatalog:
 
         :param k: Socket connection to send response through.
         :param r: List passed to socket, containing the filename associated with the catalog node
-        database the cluster node URIs, and the SQL being executed.
+            database the cluster node URIs, and the SQL being executed.
         :return: None.
         """
         f, node_uris, ddl = r[1:4]
@@ -65,8 +73,15 @@ class LocalCatalog:
         # Assemble our tuples and perform the insertion/deletion.
         try:
             if SQLFile.is_drop_ddl(ddl):
-                cur.execute('DELETE FROM dtables WHERE tname = ?', (table, ))
+                cur.execute('DELETE FROM dtables WHERE tname = ?', (table,))
             else:
+                e = cur.execute('SELECT 1 FROM dtables WHERE tname = ? LIMIT 1',
+                                (table,)).fetchone()
+
+                # If the table exists, delete all entries before performing the insertion.
+                if len(e) != 0:
+                    cur.execute('DELETE FROM dtables WHERE tname = ?', (table,))
+
                 tuples = [(table, node_uris[i], i + 1) for i in range(len(node_uris))]
                 cur.executemany('INSERT INTO dtables VALUES (?, NULL, ?, NULL, NULL, NULL, ?, '
                                 'NULL, NULL, NULL)', tuples)
@@ -80,11 +95,14 @@ class LocalCatalog:
 
     @staticmethod
     def record_partition(k, r):
-        """ TODO: Finish the documentation here.
+        """ Record the partition to catalog database, assuming the working node is the catalog
+        node. Using the catalog database filename, the partition dictionary, and the specified
+        number of nodes from the received command list. Return an acknowledgement through the
+        given socket.
 
-        :param k:
-        :param r:
-        :return:
+        :param k: Socket to send acknowledgement through.
+        :param r: Command list passed through the same socket.
+        :return: None.
         """
         f, r_d, numnodes = r[1:4]
 
@@ -116,11 +134,13 @@ class LocalCatalog:
 
     @staticmethod
     def return_node_uris(k, r):
-        """ TODO: Finish this documentation.
+        """ Return a list of node URIs stored in the 'dtables' table, which informs the client
+        machine (not this node) how to contact the cluster. Using the catalog database filename
+        and the name of table associated with the cluster.
 
-        :param k:
-        :param r:
-        :return:
+        :param k: Socket to send node URI list to.
+        :param r: Command list passed through the same socket.
+        :return: None.
         """
         f, tname = r[1:3]
 
@@ -164,14 +184,14 @@ class RemoteCatalog:
 
     @staticmethod
     def record_ddl(catalog_uri, success_nodes, ddl):
-        """ Given information about the cluster and the DDL statement to execute, lookup the
-        location of the catalog node and pass the request there.
+        """ Given information about the cluster and the DDL statement to execute, store the DDL
+        in the catalog node.
 
         :param catalog_uri: The URI associated with the catalog.
         :param success_nodes: List containing the URIs of the successfully executed nodes.
         :param ddl: DDL statement to pass to the catalog node.
         :return The resulting error if the appropriate response is not returned successfully. True
-        otherwise.
+            otherwise.
         """
         host, port = catalog_uri.split(':', 1)
         port, f = port.split('/', 1)
@@ -200,11 +220,12 @@ class RemoteCatalog:
 
     @staticmethod
     def return_node_uris(catalog, tname):
-        """ TODO: Finish the documentation here.
+        """ Given the catalog URI and the name of table, grab the node URIs from the catalog node.
 
-        :param catalog:
-        :param tname:
-        :return:
+        :param catalog: The URI associated with the catalog.
+        :param tname: Name of the table associated with the cluster to search.
+        :return: The resulting error if the appropriate response is not returned successfully.
+            Otherwise, a list of node URIs.
         """
         host, port = catalog.split(':', 1)
         port, f = port.split('/', 1)
@@ -234,12 +255,15 @@ class RemoteCatalog:
 
     @staticmethod
     def update_partition(catalog, r_d, numnodes):
-        """ TODO: Finish the documentation here.
+        """ Given information about the catalog and partitioning information, store the partition
+        in the catalog node.
 
-        :param catalog:
-        :param r_d:
-        :param numnodes:
-        :return:
+        :param catalog: The URI associated with the catalog.
+        :param r_d: Dictionary containing partitioning entries.
+        :param numnodes: Number of nodes associated with the cluster (only required for hash and
+            range partitioning).
+        :return: The resulting error if the appropriate response is notreturned successfully.
+            Otherwise, true.
         """
         host, port = catalog.split(':', 1)
         port, f = port.split('/', 1)

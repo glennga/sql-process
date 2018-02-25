@@ -9,7 +9,8 @@ Error: 2 - Incorrect number of arguments.
        3 - [clustercfg] is not correctly formatted.
        4 - [ddlfile] is not correctly formatted.
        5 - Unable to connect to the catalog node.
-       6 - Catalog node was not updated.
+       6 - Node entries in the cluster configuration file are improperly formatted.
+       7 - Unable to connect to the catalog node (most likely lost connection here).
 """
 
 import pickle

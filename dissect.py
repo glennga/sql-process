@@ -2,7 +2,15 @@
 """
 Contains functions to dissect (parse) various files (clustercfg, sqlfile).
 
-Usage: TODO: Update the usage section.
+Usage: SQLFile.as_string([SQL file])
+       SQLFile.is_ddl([SQL string])
+       SQLFile.is_drop_ddl([SQL string])
+       SQLFile.is_select([SQL string])
+       SQLFile.table([SQL string])
+
+       ClusterCFG.catalog_uri([cluster configuration file])
+       ClusterCFG.node_uris([cluster configuration file])
+       ClusterCFG.load([cluster configuration file])
 """
 
 from configparser import ConfigParser
@@ -26,7 +34,7 @@ class SQLFile:
 
         :param f: Filename of the SQL file.
         :return: String associated with error if there exists no catalog hostname. Otherwise,
-        a one element list with the SQL to execute.
+            a one element list with the SQL to execute.
         """
         try:
             with open(f) as sqlfile_f:
@@ -39,10 +47,11 @@ class SQLFile:
 
     @staticmethod
     def is_ddl(s):
-        """ TODO: Finish the documentation here.
+        """ Given a SQL string, determine if the statement is a DDL (CREATE TABLE, DROP TABLE) or
+        not.
 
-        :param s:
-        :return:
+        :param s: SQL string to search for DDL with.
+        :return: True if the given statement is a DDL. False otherwise.
         """
         # Create the parse tree for the given SQL string.
         lexer = SQLiteLexer(InputStream(s))
@@ -59,10 +68,10 @@ class SQLFile:
 
     @staticmethod
     def is_drop_ddl(s):
-        """ TODO: Finish the documentation here.
+        """ Given a SQL string, determine if the statement is a DROP TABLE statement or not.
 
-        :param s:
-        :return:
+        :param s: SQL string to search for DROP TABLE statement with.
+        :return: True if the given statement is a DROP TABLE statement. False otherwise.
         """
         # Create the parse tree for the given SQL string.
         lexer = SQLiteLexer(InputStream(s))
@@ -78,11 +87,10 @@ class SQLFile:
         return t.is_drop
 
     def is_select(s):
-        """ TODO: Finish the documentation here.
+        """ Given a SQL string, determine if the statement if a SELECT statement or not.
 
-
-        :param s:
-        :return:
+        :param s: SQL string to search for SELECT statement with.
+        :return: True if the given statement is a SELECT statement. False otherwise.
         """
         # Create the parse tree for the given SQL string.
         lexer = SQLiteLexer(InputStream(s))
@@ -100,9 +108,9 @@ class SQLFile:
     def table(s):
         """ Given a SQLite string, extract the TABLE associated with the operation.
 
-        :param s: SQLite to extract table from.
+        :param s: SQL string to extract table from.
         :return: False if the SQL statement does not contain a table (i.e. is formatted incorrectly).
-        Otherwise, the table associated with the SQL.
+            Otherwise, the table associated with the SQL.
         """
         # Create the parse tree for the given SQL string.
         lexer = SQLiteLexer(InputStream(s))
@@ -124,11 +132,11 @@ class ClusterCFG:
 
     @staticmethod
     def catalog_uri(f):
-        """ TODO: Finish the description here.
+        """ Given the cluster configuration file, grab the catalog node URI.
 
-        :param f:
+        :param f: Cluster configuration filename.
         :return: String associated with error if there exists no catalog hostname. Otherwise,
-        a one element list with the URI associated with the catalog node.
+            a one element list with the URI associated with the catalog node.
         """
         config = ConfigParser()
 
@@ -147,10 +155,11 @@ class ClusterCFG:
 
     @staticmethod
     def node_uris(f):
-        """ TODO: Finish the documentation here.
+        """ Given the cluster configuration file, grab all the node URIs.
 
-        :param f:
-        :return:
+        :param f: Cluster configuration filename.
+        :return: String associated with error if the file is not formatted properly. Otherwise,
+            a list of node URIs.
         """
         config = ConfigParser()
 
@@ -170,6 +179,7 @@ class ClusterCFG:
         except ValueError:
             return '\'numnodes\' is not a valid integer.'
 
+        # Collect the node URIs.
         nodes = []
         try:
             [nodes.append(config['D']['node' + str(i + 1) + '.hostname']) for i in range(n)]
@@ -178,22 +188,26 @@ class ClusterCFG:
             return 'Node entries not formatted correctly.'
 
     @staticmethod
-    def partition(p_m, r_d, config):
-        """ TODO: Finish the description.
+    def _partition(p_m, r_d, config):
+        """ Helper method for the 'load' function. Returns all of the partitioning information
+        from a configuration file reader.
 
-        :param p_m:
-        :param r_d:
-        :param config:
-        :return:
+        :param p_m: Partitioning method to parse for. Exists in space ['range', 'notparition',
+            'hash'].
+        :param r_d: Current partitioning information as a dictionary.
+        :param config: Open onfiguration file reader.
+        :return: String containing the error if the partitioning information is not correctly
+            formatted. Otherwise, the partitioning dictionary with the additional partitioning
+            information.
         """
         inf_a = lambda b: inf if b == '+inf' else (-inf if b == '-inf' else float(b))
 
-        # TODO: Add comments here.
         try:
             if p_m.lower() == 'range':
                 r_d.update({'partmtd': 1, 'partcol': config['D']['partition.column'],
                             'param1': [], 'param2': []})
 
+                # For range partitioning, look for the 'partition.node[i]' entries.
                 for i in range(int(config['D']['numnodes'])):
                     r_d['param1'].append(inf_a(config['D']['partition.node' +
                                                            str(i + 1) + '.param1']))
@@ -209,10 +223,10 @@ class ClusterCFG:
                 r_d.update({'partmtd': 0})
 
             else:
-                return '\'partition.method\' not in space [range, hash, notpartition]'
+                return '\'partition.method\' not in space [range, hash, notpartition].'
 
         except KeyError as e:
-            return str(e)
+            return 'Not found: ' + str(e)
         except ValueError as e:
             return '\'param1\', \'param2\', or \'numnodes\' is not formatted correctly: ' + str(e)
 
@@ -220,10 +234,12 @@ class ClusterCFG:
 
     @staticmethod
     def load(f):
-        """ TODO: Finish the description here.
+        """ Given the cluster configuration file, collect the catalog node URI, all of the
+        partitioning information from the file, and the expected number of nodes.
 
-        :param f:
-        :return:
+        :param f: Cluster configuration filename.
+        :return: String containing the error if the file is not formatted properly. Otherwise, the
+            catalog node URI, the partitioning dictionary, and the expected number of nodes as list.
         """
         config, r_d = ConfigParser(), {}
 
@@ -243,7 +259,7 @@ class ClusterCFG:
         r_d.update({'tname': config['D']['tablename']})
 
         # Based on the partitioning specified, parse appropriate sections. Return error if exists.
-        r_pd = ClusterCFG.partition(config['D']['partition.method'], r_d, config)
+        r_pd = ClusterCFG._partition(config['D']['partition.method'], r_d, config)
         if not isinstance(r_pd, dict):
             return r_pd
         else:

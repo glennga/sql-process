@@ -1,7 +1,13 @@
 # coding=utf-8
 """
-Lists for a command list to be sent to the given port. There exists two
-TODO: Finish this description.
+Listens for a command list to be sent to the given port, and returns a command response list
+through that same port. Given an operation code OP, the following occurs:
+
+OP : 'E' -> Execute a SQL statement and return tuples if applicable.
+   : 'C' -> Record a DDL to the catalog database.
+   : 'K' -> Record partitioning information to the catalog database.
+   : 'U' -> Lookup the node URIs on the catalog database and return these.
+   : 'P' -> Lookup the fields for a given table and return this.
 
 Usage: python parDBd.py [hostname] [port]
 
@@ -57,11 +63,11 @@ def execute_on_db(k, r):
 
 
 def return_columns(k, r):
-    """ TODO: Finish description.
+    """ Return the columns associated with a table through the given socket.
 
-    :param k:
-    :param r:
-    :return:
+    :param k: Socket connection to send response through.
+    :param r: List passed to socket, containing the name of the database file and the table name.
+    :return: None.
     """
     f, tname, col = r[1], r[2], []
     conn = sql.connect(f)

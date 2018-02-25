@@ -1,11 +1,16 @@
 # coding=utf-8
 """
-TODO: Finish this description.
-TODO: We assume that the CSV is valid.
+Given a CSV of tuples and a configuration file of the partitioning, insert the tuples into the
+cluster. An assumption is made that the CSV is valid (CSV must arrive from a reputable source).
 
 Usage: python loadCSV.py [clustercfg] [csv]
 
-Error: TODO: Finish the error codes here.
+Error: 2 - Incorrect number of arguments.
+       3 - The 'clustercfg' file is not properly formatted.
+       4 - The number of nodes specified in 'clustercfg' and the catalog node do not match.
+       5 - The node URIs from the catalog node could not be collected.
+       6 - The first node in the cluster could not be reached.
+       7 - There exists a node in the cluster that could not be reached (not just the first).
 """
 
 import csv
@@ -18,26 +23,34 @@ from dissect import ClusterCFG
 
 
 def create_socket(n_i):
-    """ TODO: Finish the documentation here.
+    """ Given a node URI, attempt to create a socket.
 
-    :param n_i:
-    :return:
+    :param n_i: Node URI to create socket with.
+    :return: False if the socket could not be created. The appropriate socket otherwise.
     """
     host, sock = n_i.split(':', 1)[0], socket.socket()
     port, f = n_i.split(':', 1)[1].split('/', 1)
 
-    sock.connect((host, int(port)))
+    try:
+        # Attept to create a socket...
+        sock.connect((host, int(port)))
+    except OSError:
+        # If this is not successful, then close the socket and return false.
+        sock.close()
+        return False
+
+    # Otherwise, return the socket and the file.
     return sock, f
 
 
 def send_insert(k, s, f, ell):
-    """ TODO: Finish this description.
+    """ Construct the appropriate command list and send this over the given socket.
 
-    :param k:
-    :param s:
-    :param f:
-    :param ell:
-    :return:
+    :param k: Socket to send command list through.
+    :param s: To-be-prepared SQL string to execute on the node.
+    :param f: Database filename to record to.
+    :param ell: Tuples to attach to SQL string.
+    :return: String containing the error if an error occurred on the node. Otherwise, true.
     """
     # Send our command.
     k.send(pickle.dumps(['E', f, s, ell]))
@@ -57,12 +70,15 @@ def send_insert(k, s, f, ell):
 
 
 def send_insert_selective(s_l, sock_f):
-    """
+    """ Construct the appropriate command list for a list of SQL strings, sockets, & files,
+    and send them to each node iff an insert is to actually occur (invalid SQL strings come from
+    partitioned nodes that don't perform inserts).
 
-    :param s_l:
-    :param sock_f:
-    :return:
+    :param s_l: List of to-be-prepared SQL strings.
+    :param sock_f: List of lists of sockets (first element) and database filenames (second element).
+    :return: False if there exists errors on any nodes. True otherwise.
     """
+    is_error_free = True
 
     # Finalize the insertion string. Remove if the current node does not insert anything.
     removed = []
@@ -81,25 +97,26 @@ def send_insert_selective(s_l, sock_f):
                                    [x for sublist in s_l[i][1] for x in sublist])
             if isinstance(response, str):
                 print('Error on Node ' + str(i) + ': ' + response)
-                list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-                return False
+                is_error_free = False
 
     # Operation was successful, return true.
-    return True
+    return is_error_free
 
 
 def nopart_load(n, c, r_d, f):
-    """ TODO: Finish this description.
-    # If there exists no partition, we execute each insert to every node in the cluster.
+    """ There exists no partitioning. We execute each insertion on every node in the cluster.
+    Display any errors that occur.
 
-    :param n:
-    :param c:
-    :param r_d:
-    :param f:
-    :return:
+    :param n: List of node URIs.
+    :param c: Catalog node URI.
+    :param r_d: Dictionary of partitioning information.
+    :param f: List of node filenames, indexed the same as 'n'.
+    :return: None.
     """
     # For each node in the node URIs, construct a socket.
-    sock_f = list(map(lambda x: create_socket(x), n))
+    sock_f, is_error_free = list(map(lambda x: create_socket(x), n)), True
+    if not all(sock_f):
+        print('All nodes in cluster could not be reached.'), exit(7)
 
     # Read every line of the CSV.
     csv_l = []
@@ -123,30 +140,35 @@ def nopart_load(n, c, r_d, f):
 
         if isinstance(response, str):
             print('Error on Node ' + str(i) + ': ' + response)
-            list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-            return
+            is_error_free = False
 
     # Close all sockets.
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-    print('Insertion was successful.')
-
-
+    print('Insertion was ' + 'successful.' if not is_error_free else 'not successful.')
 
 
 def hashpart_load(n, c, r_d, f):
-    """ TODO: Finish this description.
-    TODO: Note assumption on param1 being an integer.
+    """ There exists a hash partition on the cluster. Determine which data gets inserted into
+    where appropriately. The hash function: X = ( partcol mod partparam1 ) + 1 is applied.
 
-    :param n:
-    :param c:
-    :param r_d:
-    :param f:
-    :return:
+    :param n: List of node URIs.
+    :param c: Catalog node URI.
+    :param r_d: Dictionary of partitioning information.
+    :param f: List of node filenames, indexed the same as 'n'.
+    :return: None.
     """
+    try:
+        p = int(r_d['param1'])
+    except ValueError:
+        print('\'partition.param1\' is not an integer.')
+        return
+
     # For each node in the node URIs, construct a socket.
-    h, s_l = lambda b: (b % int(r_d['param1'])) + 1, [[[], []] for _ in n]
+    h, s_l = lambda b: (b % p) + 1, [[[], []] for _ in n]
     sock_f = list(map(lambda x: create_socket(x), n))
     [s_t[0].append('INSERT INTO ' + r_d['tname'] + ' VALUES ') for s_t in s_l]
+    if not all(sock_f):
+        print('All nodes in cluster could not be reached.'), exit(7)
 
     # Determine the index of the partitioned column.
     try:
@@ -164,8 +186,9 @@ def hashpart_load(n, c, r_d, f):
             s_l[h(int(line[y])) - 1][1].append(line)
 
     # Insert the data into their respective nodes.
-    if send_insert_selective(s_l, sock_f):
-        print('Insertion was successful.')
+    print('Insertion was ' + 'successful.' if not
+    send_insert_selective(s_l, sock_f) else 'not successful.')
+    list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.
     response_p = RemoteCatalog.update_partition(c, r_d, len(n))
@@ -174,24 +197,23 @@ def hashpart_load(n, c, r_d, f):
     else:
         print('Catalog node has been updated with the partitions.')
 
-    # Close all sockets.
-    list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
-
 
 def rangepart_load(n, c, r_d, f):
-    """ TODO: Finish this description.
-    TODO: Note that the range is: partparam1 < partcol <= partparam2.
+    """ There exists a range partitioning on the cluster. Determine which data gets inserted into
+    where appropriately. Each range is applied as such: partparam1 < partcol <= partparam2.
 
-    :param n:
-    :param c:
-    :param r_d:
-    :param f:
-    :return:
+    :param n: List of node URIs.
+    :param c: Catalog node URI.
+    :param r_d: Dictionary of partitioning information.
+    :param f: List of node filenames, indexed the same as 'n'.
+    :return: None.
     """
     # For each node in the node URIs, construct a socket.
     r_bounds, s_l = list(zip(r_d['param1'], r_d['param2'])), [[[], []] for _ in n]
     sock_f = list(map(lambda x: create_socket(x), n))
     [s_t[0].append('INSERT INTO ' + r_d['tname'] + ' VALUES ') for s_t in s_l]
+    if not all(sock_f):
+        print('All nodes in cluster could not be reached.'), exit(7)
 
     # Ranges must be ordered from lower to higher.
     if any(list(map(lambda a: a[0] > a[1], r_bounds))):
@@ -216,8 +238,8 @@ def rangepart_load(n, c, r_d, f):
                     s_l[i][1].append(line)
 
     # Insert the data into their respective nodes.
-    if send_insert_selective(s_l, sock_f):
-        print('Insertion was successful.')
+    print('Insertion was ' + 'successful.' if not
+    send_insert_selective(s_l, sock_f) else 'not successful.')
     list(map(lambda x: x.close(), list(zip(*sock_f))[0]))
 
     # Update the partition information in the catalog node.
@@ -246,17 +268,22 @@ if __name__ == '__main__':
 
     # If the number of nodes here does not match the nodes in catalog, return with an error.
     if r_d['partmtd'] in [1, 2] and numnodes != len(node_uris):
-        print('\'numnodes\' specified does not match number of nodes in catalog node'), exit(4)
+        print('Incorrect number of nodes specified in \'clustercfg\'.'), exit(4)
 
     # Extract the columns from the table, using the first node.
-    sock, f = create_socket(node_uris[0])
+    r_s = create_socket(node_uris[0])
+    if r_s is not False:
+        sock, f = r_s
+    else:
+        print('Could not connect to first node in the cluster.'), exit(6)
+
     sock.send(pickle.dumps(['P', f, r_d['tname']]))
     response = sock.recv(4096)
     try:
         r_d.update({'col_s': pickle.loads(response)[1]}) if response != b'' \
             else print('Error: Failed to receive response.') and exit(6)
     except EOFError as e:
-        print('Error: ' + str(e))
+        print('Error: ' + str(e)), exit(6)
 
     # Determine the partitioning. Use the appropriate load function when determined.
     [nopart_load, rangepart_load, hashpart_load][r_d['partmtd']] \

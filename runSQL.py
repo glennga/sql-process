@@ -6,7 +6,11 @@ in 'clustercfg'.
 
 Usage: python runSQL.py [clustercfg] [sqlfile]
 
-Error: TODO: Compile all of the error codes.
+Error: 2 - Incorrect number of arguments.
+       3 - There exists an error with the clustercfg file.
+       4 - There exists an error with the SQL file.
+       5 - Catalog could not be reached or the table was not found.
+       6 - Table not found in SQL file.
 """
 
 import ctypes
@@ -102,8 +106,7 @@ def execute_sql(node_uri, n, s, s_nodes):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 runSQL.py [clustercfg] [sqlfile]')
-        exit(2)
+        print('Usage: python3 runSQL.py [clustercfg] [sqlfile]'), exit(2)
 
     # Parse both the clustercfg and sqlfile. Ensure that both are properly formatted.
     c_r, s_r = ClusterCFG.catalog_uri(sys.argv[1]), SQLFile.as_string(sys.argv[2])
