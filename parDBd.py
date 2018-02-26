@@ -27,6 +27,33 @@ from catalog import LocalCatalog
 from dissect import SQLFile
 
 
+def insert_single_on_db(k, r):
+    """ Perform a single insertion SQL operation on the passed database. Do not wait for a
+    terminating operation code.
+
+    :param k: Socket connection to send response through.
+    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :return: None.
+    """
+    f, s, tup, r_i = r[1], r[2], r[3], r
+    try:
+        conn = sql.connect(f)
+    except sql.Error as e:
+        k.send(pickle.dumps(str(e)))
+        return
+    cur = conn.cursor()
+
+    # Execute the command. Return the error if any exist.
+    try:
+        cur.execute(s, tup)
+    except sql.Error as e:
+        k.send(pickle.dumps(str(e)))
+
+    # Otherwise, no error exists. Send the success message.
+    conn.commit(), conn.close()
+    k.send(pickle.dumps(['EY', 'Success']))
+
+
 def insert_on_db(k, r):
     """ Perform the given insertion SQL operation on the passed database. Wait for the
     terminating 'YZ' and 'YY' operation codes.
@@ -87,7 +114,6 @@ def execute_on_db(k, r):
 
     # Execute the command. Return the error if any exist.
     try:
-        # Support for prepared statements, dependent on the length of the input array.
         if len(r) == 3:
             result = cur.execute(s).fetchall()
         else:
@@ -141,7 +167,7 @@ def return_columns(k, r):
 def interpret(k, r):
     """ Given a socket and a message through the socket, interpret the message. The result should
     be a list of length greater than 1, and the first element should be in the space ['E', 'C',
-    'U', 'P', 'K', 'YS']. 'YZ' and 'YY' are only valid after being initially passed 'YS'.
+    'U', 'P', 'K', 'YS'].
 
     :param k: Socket connection pass response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
@@ -156,6 +182,12 @@ def interpret(k, r):
     if r[0] == 'YS':
         # Execute multiple insertion operations on a database.
         insert_on_db(k, r)
+    elif r[0] == 'YZ':
+        # Execute a single insertion operation on a database.
+        insert_single_on_db(k, r)
+    elif r[0] == 'YY':
+        # Do not perform any action. Send a success message
+        k.send(pickle.dumps(['EY', 'Success']))
     elif r[0] == 'E':
         # Execute an operation on a database.
         execute_on_db(k, r)

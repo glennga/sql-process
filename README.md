@@ -15,6 +15,8 @@ For client programs that load a CSV file onto several machines using a specified
 
 ![](images/load-csv-diagram.png)
 
+The repository has been tested with the dataset `example/csv`, found in TPC-H benchmark.
+
 ## Getting Started
 1. To get started, all nodes in your cluster should have `python3` and `git`. To access your data outside of Python, install `sqlite3` as well:
     ```
