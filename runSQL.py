@@ -14,10 +14,10 @@ Error: 2 - Incorrect number of arguments.
 """
 
 import ctypes
+import os
 import pickle
 import socket
 import sys
-import os
 from multiprocessing import Process, Array
 from subprocess import call
 
@@ -54,13 +54,14 @@ def collect_socket(k):
     return operation, resultant
 
 
-def execute_sql(node_uri, n, s, s_nodes):
+def execute_sql(node_uri, n, s_n, s_nodes_n):
     """ Given the URI of a node from the clustercfg file and the SQL to execute, send the SQL to
     the appropriate node. Print any return messages or errors that occur.
 
     :param node_uri: Node URI from the clustercfg file (right side of key-value pair).
     :param n: Node number that this operation is working on.
-    :param s: SQL statement to execute on the node.
+    :param s_n: SQL statement to execute on the node.
+    :param s_nodes_n: Successful nodes array to record to.
     :return: None.
     """
     host, sock = node_uri.split(':', 1)[0], ''
@@ -75,7 +76,7 @@ def execute_sql(node_uri, n, s, s_nodes):
         return
 
     # Pickle our command list ('E', filename, and SQL), and send our message.
-    sock.send(pickle.dumps(['E', f, s]))
+    sock.send(pickle.dumps(['E', f, s_n]))
 
     # Wait for a response.
     r = collect_socket(sock)
@@ -100,7 +101,7 @@ def execute_sql(node_uri, n, s, s_nodes):
             print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
 
     # End is reached. The operation was successful.
-    s_nodes[n - 1] = n
+    s_nodes_n[n - 1] = n
     sock.close()
 
 

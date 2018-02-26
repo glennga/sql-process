@@ -27,46 +27,46 @@ from catalog import LocalCatalog
 from dissect import SQLFile
 
 
-def insert_single_on_db(k, r):
+def insert_single_on_db(k_n, r):
     """ Perform a single insertion SQL operation on the passed database. Do not wait for a
     terminating operation code.
 
-    :param k: Socket connection to send response through.
+    :param k_n: Socket connection to send response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
     f, s, tup, r_i = r[1], r[2], r[3], r
     try:
         conn = sql.connect(f)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
         return
     cur = conn.cursor()
 
     # Execute the command. Return the error if any exist.
     try:
         cur.execute(s, tup)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
 
     # Otherwise, no error exists. Send the success message.
     conn.commit(), conn.close()
-    k.send(pickle.dumps(['EY', 'Success']))
+    k_n.send(pickle.dumps(['EY', 'Success']))
 
 
-def insert_on_db(k, r):
+def insert_on_db(k_n, r):
     """ Perform the given insertion SQL operation on the passed database. Wait for the
     terminating 'YZ' and 'YY' operation codes.
 
-    :param k: Socket connection to send response through.
+    :param k_n: Socket connection to send response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
     f, s, tup, r_i = r[1], r[2], r[3], r
     try:
         conn = sql.connect(f)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
         return
     cur = conn.cursor()
 
@@ -75,40 +75,40 @@ def insert_on_db(k, r):
         # Execute the command. Return the error if any exist.
         try:
             cur.execute(s, tup)
-            k.send(pickle.dumps(['EY', 'Success']))
-            r_i = pickle.loads(k.recv(4096))
+            k_n.send(pickle.dumps(['EY', 'Success']))
+            r_i = pickle.loads(k_n.recv(4096))
 
             # Do not proceed if 'YY' (stop waiting, don't execute) operation code is passed.
             if r_i[0] == 'YY':
                 break
             elif r_i[0] == 'YZ':
                 cur.execute(r_i[2], r_i[3])
-                k.send(pickle.dumps(['EY', 'Success']))
+                k_n.send(pickle.dumps(['EY', 'Success']))
                 break
             else:
                 f, s, tup = r_i[1], r_i[2], r_i[3]
 
-        except (sql.Error, EOFError) as e:
-            k.send(pickle.dumps(str(e)))
+        except (sql.Error, EOFError) as e_1:
+            k_n.send(pickle.dumps(str(e_1)))
 
     # Otherwise, no error exists. Commit our changes and close our connection.
     conn.commit(), conn.close()
-    k.send(pickle.dumps(['EY', 'Success']))
+    k_n.send(pickle.dumps(['EY', 'Success']))
 
 
-def execute_on_db(k, r):
+def execute_on_db(k_n, r):
     """ Perform the given SQL operation on the passed database. Return any tuples if the
     statement is a SELECT statement.
 
-    :param k: Socket connection to send response through.
+    :param k_n: Socket connection to send response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
     f, s, result = r[1], r[2], []
     try:
         conn = sql.connect(f)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
         return
     cur = conn.cursor()
 
@@ -117,9 +117,9 @@ def execute_on_db(k, r):
         if len(r) == 3:
             result = cur.execute(s).fetchall()
         else:
-            k.send(pickle.dumps('Incorrect number of items sent to socket.'))
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+            k_n.send(pickle.dumps('Incorrect number of items sent to socket.'))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
 
     # Otherwise, no error exists. Send the resulting tuples (if any exist).
     conn.commit(), conn.close()
@@ -128,83 +128,83 @@ def execute_on_db(k, r):
     if SQLFile.is_select(s):
         for i, r_t in enumerate(result):
             # If this is the last tuple, append the ending operation code.
-            k.send(pickle.dumps(['EZ' if i + 1 == len(result) else 'ES', r_t]))
+            k_n.send(pickle.dumps(['EZ' if i + 1 == len(result) else 'ES', r_t]))
         if len(result) == 0:
-            k.send(pickle.dumps(['EZ', 'No tuples found.']))
+            k_n.send(pickle.dumps(['EZ', 'No tuples found.']))
     else:
         # Otherwise, assume that the statement has passed.
-        k.send(pickle.dumps(['EZ', 'Success']))
+        k_n.send(pickle.dumps(['EZ', 'Success']))
 
 
-def return_columns(k, r):
+def return_columns(k_n, r):
     """ Return the columns associated with a table through the given socket.
 
-    :param k: Socket connection to send response through.
+    :param k_n: Socket connection to send response through.
     :param r: List passed to socket, containing the name of the database file and the table name.
     :return: None.
     """
     f, tname, col = r[1], r[2], []
     try:
         conn = sql.connect(f)
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
         return
     cur = conn.cursor()
 
     # Execute the command. Return the error if any exist.
     try:
         col = cur.execute('SELECT * FROM ' + tname + ' LIMIT 1').description
-    except sql.Error as e:
-        k.send(pickle.dumps(str(e)))
+    except sql.Error as e_1:
+        k_n.send(pickle.dumps(str(e_1)))
 
     # Otherwise, no error exists. Send the resulting tuples (if any exist).
     conn.commit(), conn.close()
 
     # Return the column names.
-    k.send(pickle.dumps(['EP', [col[i][0] for i in range(len(col))]]))
+    k_n.send(pickle.dumps(['EP', [col[i][0] for i in range(len(col))]]))
 
 
-def interpret(k, r):
+def interpret(k_n, r):
     """ Given a socket and a message through the socket, interpret the message. The result should
     be a list of length greater than 1, and the first element should be in the space ['E', 'C',
     'U', 'P', 'K', 'YS'].
 
-    :param k: Socket connection pass response through.
+    :param k_n: Socket connection pass response through.
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
 
     # If our response is not an list, return an error.
     if not hasattr(r, '__iter__'):
-        k.send(pickle.dumps('Input not an list.')), k.close()
+        k_n.send(pickle.dumps('Input not an list.')), k_n.close()
         return
 
     if r[0] == 'YS':
         # Execute multiple insertion operations on a database.
-        insert_on_db(k, r)
+        insert_on_db(k_n, r)
     elif r[0] == 'YZ':
         # Execute a single insertion operation on a database.
-        insert_single_on_db(k, r)
+        insert_single_on_db(k_n, r)
     elif r[0] == 'YY':
         # Do not perform any action. Send a success message
-        k.send(pickle.dumps(['EY', 'Success']))
+        k_n.send(pickle.dumps(['EY', 'Success']))
     elif r[0] == 'E':
         # Execute an operation on a database.
-        execute_on_db(k, r)
+        execute_on_db(k_n, r)
     elif r[0] == 'C':
         # Insert ddl into the catalog table.
-        LocalCatalog.record_ddl(k, r)
+        LocalCatalog.record_ddl(k_n, r)
     elif r[0] == 'K':
         # Insert partition data into the catalog table.
-        LocalCatalog.record_partition(k, r)
+        LocalCatalog.record_partition(k_n, r)
     elif r[0] == 'U':
         # Return the URIs associated with each node.
-        LocalCatalog.return_node_uris(k, r)
+        LocalCatalog.return_node_uris(k_n, r)
     elif r[0] == 'P':
         # Return the columns associated with the given table.
-        return_columns(k, r)
+        return_columns(k_n, r)
     else:
-        k.send(pickle.dumps('Operation code invalid.'))
+        k_n.send(pickle.dumps('Operation code invalid.'))
 
 
 if __name__ == '__main__':

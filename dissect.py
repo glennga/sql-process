@@ -85,6 +85,7 @@ class SQLFile:
 
         return t.is_drop
 
+    @staticmethod
     def is_select(s):
         """ Given a SQL string, determine if the statement if a SELECT statement or not.
 
@@ -104,11 +105,12 @@ class SQLFile:
 
         return t.is_select
 
+    @staticmethod
     def table(s):
         """ Given a SQLite string, extract the TABLE associated with the operation.
 
         :param s: SQL string to extract table from.
-        :return: False if the SQL statement does not contain a table (i.e. is formatted incorrectly).
+        :return: False if the SQL statement does not contain a table (i.e. formatted incorrectly).
             Otherwise, the table associated with the SQL.
         """
         # Create the parse tree for the given SQL string.

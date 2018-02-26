@@ -25,17 +25,17 @@ from dissect import ClusterCFG, SQLFile
 successful_nodes = []
 
 
-def execute_ddl(node, name, s):
+def execute_ddl(node_n, name, s_n):
     """ Given node information from the clustercfg file and the DDL to execute, send the DDL to a
     node for it to be executed. Print any errors that pop up.
 
-    :param node: Node information from the clustercfg file (right side of key-value pair).
+    :param node_n: Node information from the clustercfg file (right side of key-value pair).
     :param name: Name of the node (left side of key-value pair).
-    :param s: DDL statement to run on the node.
+    :param s_n: DDL statement to run on the node.
     :return None.
     """
-    host, sock, n = node.split(':', 1)[0], '', name.split('.', 1)[0].split('node')[1]
-    port, f = (node.split(':', 1)[1]).split('/', 1)
+    host, sock, n = node_n.split(':', 1)[0], '', name.split('.', 1)[0].split('node')[1]
+    port, f = (node_n.split(':', 1)[1]).split('/', 1)
 
     # Create our socket.
     try:
@@ -46,7 +46,7 @@ def execute_ddl(node, name, s):
         return
 
     # Pickle our command list ('E', filename, and DDL), and send our message.
-    sock.send(pickle.dumps(['E', f, s]))
+    sock.send(pickle.dumps(['E', f, s_n]))
 
     # Wait for a response to be sent back, and return the response.
     response = sock.recv(4096)
