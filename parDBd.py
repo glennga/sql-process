@@ -71,13 +71,13 @@ def insert_on_db(k_n, r):
         Network.write(k_n, ['EY', 'Success'])
 
         # Interpret the current operation code.
-        operation, _ = Network.read(k_n, net_handler)
+        result = Network.read(k_n, net_handler)
 
         # Stop if YZ pr YY, proceed otherwise.
-        if operation == 'YY':
+        if result[0] == 'YY':
             break
-        elif operation == 'YZ':
-            ErrorHandle.is_error(Database.execute(cur, s, sql_handler, tup))
+        elif result[0] == 'YZ':
+            ErrorHandle.act_upon_error(Database.execute(cur, s, sql_handler, tup), net_handler)
             break
         else:
             f, s, tup = r_i[1], r_i[2], r_i[3]
@@ -133,7 +133,7 @@ def return_columns(k_n, r):
 
     # Execute the command. Return the error if any exist.
     col = Database.description(cur, 'SELECT * '
-                                    'FROM ' + tname + 'LIMIT 1;', sql_handler)
+                                    'FROM ' + tname + ' LIMIT 1;', sql_handler)
     conn.close()
 
     # Return the column names.
