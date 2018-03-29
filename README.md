@@ -7,7 +7,7 @@ This repository contains code to execute a SQLite statement on every node in a c
 
 The node that initiates these operations is known as the *client* node. This client node can exist as a part of the cluster, or completely separate from the cluster. The nodes that hold the data (in databases) will be referred to as *server* nodes. There exists a special server node that holds information about how to reach each node in the cluster and metadata about the cluster itself (partitions, number of nodes, etc...). This node is known as the *catalog* node.
 
-For client programs that execute a single statement on several machines (i.e. `runDDL.py`, `runSQL.py`), the following occurs:
+For client programs that execute a single statement on several machines (i.e. `runDDL.py`, `runSSQL.py`), the following occurs:
 
 ![](images/run-diagram.png)
 
@@ -43,7 +43,7 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     node2.hostname=10.0.0.3:50003/node3.db
     ```
 
-    Another example is depicted to load a CSV file onto the cluster (`loadCSV.py`) using hash partitioning on a three-node system:
+    Another example is depicted to load a CSV file onto the cluster (`runLCSV.py`) using hash partitioning on a three-node system:
     ```
     catalog.hostname=10.0.0.3:50001/mycatdb
 
@@ -54,7 +54,7 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     partition.param1=3
     ```
 
-    Another example file for executing SQL on the cluster (`runSQL.py`) is depicted below:
+    Another example file for executing SQL on the cluster (`runSSQL.py`) is depicted below:
     ```
     catalog.hostname=10.0.0.3:50001/cat.db
     ```
@@ -66,12 +66,12 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     decimal);
     ```
 
-    An example of a SQL file is depicted below (`runSQL.py`):
+    An example of a SQL file is depicted below (`runSSQL.py`):
     ```
     SELECT * FROM BOOKS;
     ```
 
-    An example of a CSV file is depicted below (`loadCSV.py`):
+    An example of a CSV file is depicted below (`runLCSV.py`):
     ```
     123323232,Database Systems,Ramakrishnan,Raghu
     234323423,Operating Systems,Silberstein,Adam
@@ -95,7 +95,7 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     Catalog Node Update Successful.
     ```
 
-7. With a table defined, the next operation that normally follows is the insertion of data. Use `loadCSV.py` to load data onto a partitioned cluster. Specify the `loadCSV.py` `clustercfg` file in the first argument, and the `csv` in the second:
+7. With a table defined, the next operation that normally follows is the insertion of data. Use `runLCSV.py` to load data onto a partitioned cluster. Specify the `runLCSV.py` `clustercfg` file in the first argument, and the `csv` in the second:
     ```
     python3 loadCSV.py [clustercfg] [csv]
     ```
@@ -106,7 +106,7 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     Catalog node has been updated with the partitions.
     ```
 
-8. To view the data you just inserted, use `runSQL.py` with a `SELECT` statement as the `sqlfile`. Specify the `runSQL.py` `clustercfg` file in the first argument, and the `sqlfile` in the second:
+8. To view the data you just inserted, use `runSSQL.py` with a `SELECT` statement as the `sqlfile`. Specify the `runSSQL.py` `clustercfg` file in the first argument, and the `sqlfile` in the second:
     ```
     python3 runSQL.py [clustercfg] [sqlfile]
     ```
@@ -144,13 +144,13 @@ Client Program | Key Format | Value Format | Description
 --- | ---  | --- | ---
 `runDDL.py` | `numnodes` | `[number of nodes]` |Specifies the number of nodes in the cluster.
 `runDDL.py` | `node[node-id].hostname` | `[node hostname]:[node port]/[database file]` | Specifies the URIs of each node in the cluster. See special instructions below.
-`loadCSV.py` | `tablename` | `[name of table]` | Specifies the table that exists in the cluster (logged in the catalog node) to insert the data to.
-`loadCSV.py` | `partition.method` | `[hash, range, notpartition]` | Specifies the partition method used to insert the data with. **This must be in the space [hash, range, notpartition]**.
-`loadCSV.py` (hash or range partitioning) | `partition.column` | `[column in table]` | Specifies the column to use with the partition. This **must** be a numeric column.
-`loadCSV.py` (hash partitioning) | `partition.param1` | `[number of nodes in cluster]` | Specifies the number of nodes in the cluster. The hash function (simple mod-based hashing) used corresponds to this number.
-`loadCSV.py` (range partitioning) | `numnodes` | `[number of nodes]` | Specifies the number of nodes in the cluster.
-`loadCSV.py` (range partitioning) | `partition.node[node-id].param1` | `[floor of specific column]` | Species the minimum value of the specified column that this node will store. A value of `-inf` can be used to represent a limitless lower bound. See special instructions below. This **must** be less than the corresponding `param2`.
-`loadCSV.py` (range partitioning) | `partition.node[node-id].param2` | `[ceiling of specific column]` | Species the maximum value of the specified column that this node will store. A value of `+inf` can be used to represent a limitless upper bound. See special instructions below. This **must** be greater than the corresponding `param1`.
+`runLCSV.py` | `tablename` | `[name of table]` | Specifies the table that exists in the cluster (logged in the catalog node) to insert the data to.
+`runLCSV.py` | `partition.method` | `[hash, range, notpartition]` | Specifies the partition method used to insert the data with. **This must be in the space [hash, range, notpartition]**.
+`runLCSV.py` (hash or range partitioning) | `partition.column` | `[column in table]` | Specifies the column to use with the partition. This **must** be a numeric column.
+`runLCSV.py` (hash partitioning) | `partition.param1` | `[number of nodes in cluster]` | Specifies the number of nodes in the cluster. The hash function (simple mod-based hashing) used corresponds to this number.
+`runLCSV.py` (range partitioning) | `numnodes` | `[number of nodes]` | Specifies the number of nodes in the cluster.
+`runLCSV.py` (range partitioning) | `partition.node[node-id].param1` | `[floor of specific column]` | Species the minimum value of the specified column that this node will store. A value of `-inf` can be used to represent a limitless lower bound. See special instructions below. This **must** be less than the corresponding `param2`.
+`runLCSV.py` (range partitioning) | `partition.node[node-id].param2` | `[ceiling of specific column]` | Species the maximum value of the specified column that this node will store. A value of `+inf` can be used to represent a limitless upper bound. See special instructions below. This **must** be greater than the corresponding `param1`.
 
 For all `node[node-id]` and `partition.node[node-id].param[1/2]` entries:
 1. Node-IDs are 1-indexed. The first node must start at 1, and the last node must end at `N = numnodes`.
@@ -193,7 +193,7 @@ Using the given arguments, the following occurs:
 4. Once all threads are done executing, log all successful execution commands from the `successful_nodes` list. If this is not successful, print an error message to the console and the program exits.
 
 ### Client Program: runSQL.py
-The `runSQL.py` file holds the code to execute a general SQLite statement across all nodes in the cluster. If a DDL statement is passed here, then the program `runDDL.py` is forked and used instead. If forked, the `clustercfg` for the `runDDL.py` must be used in place of the `runSQL.py` `clustercfg`.
+The `runSSQL.py` file holds the code to execute a general SQLite statement across all nodes in the cluster. If a DDL statement is passed here, then the program `runDDL.py` is forked and used instead. If forked, the `clustercfg` for the `runDDL.py` must be used in place of the `runSSQL.py` `clustercfg`.
 ```
 python3 runSQL.py [clustercfg] [sqlfile]
 ```
@@ -214,7 +214,7 @@ Using the given arguments, the following occurs:
 8. Once all processes are done executing, print a summary block that informs the client of the end state of all processes (i.e. failed or succeeded).
 
 ### Client Program: loadCSV.py
-The `loadCSV.py` file holds the code to load a comma-separated-file of tuples to a cluster of nodes. The location of each tuple is determined by the partitioning specified in the cluster configuration file. The arguments to this script are the cluster configuration file and the CSV of the tuples.
+The `runLCSV.py` file holds the code to load a comma-separated-file of tuples to a cluster of nodes. The location of each tuple is determined by the partitioning specified in the cluster configuration file. The arguments to this script are the cluster configuration file and the CSV of the tuples.
 ```
 python3 loadCSV.py [clustercfg] [csv]
 ```
@@ -291,7 +291,7 @@ Error Code | Message | Fix
 ### runSQL.py Errors
 Error Code | Message | Fix
 --- | --- | ---
-2 | `Usage: python3 runSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+2 | `Usage: python3 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 3 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `clustercfg` file cannot be found. Double check the path.
 4 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `sqlfile` file cannot be found. Double check the path.
 4 | `Error: No terminating semicolon.` | The supplied `sqlfile` does not have a terminating semi-colon to mark the end of the statement.
@@ -303,7 +303,7 @@ Error Code | Message | Fix
 ### loadCSV.py Errors
 Error Code | Message | Fix
 --- | --- | ---
-2 | `Usage: python3 loadCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+2 | `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 3 |`Error: Not found: '...'` | There exists a key error in the `clustercfg` file. Double check the `clustercfg` configuration specifications.
 4 | `Incorrect number of nodes specified in 'clustercfg'.` | If hash partitioning is specified, then the number of nodes in the cluster do not match the `partition.param1` in `clustercfg`. If range partitioning is specified, then the number of nodes in the cluster do match the `numnodes` in `clustercfg`. Use `runDDL.py` to change the table schema, or correct your `clustercfg` file.
 5 | `Catalog Error: Socket could not be established.` | The catalog could not be reached. Check your internet connection, the `catalog.hostname` entry in the `clustercfg` file, and make sure that the daemon is running on the catalog node.
