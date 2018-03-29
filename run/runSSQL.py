@@ -14,13 +14,13 @@ Error: 2 - Incorrect number of arguments.
        6 - Table not found in SQL file.
 """
 
-import random
 import sys
-from threading import Thread
 
-from lib.error import ErrorHandle
 from lib.catalog import RemoteCatalog
 from lib.dissect import SQLFile, ClusterCFG
+from lib.error import ErrorHandle
+from lib.network import Network
+from lib.parallel import Parallel
 
 # Used to store the node IDs of each **successful** execution.
 successful_nodes = []
@@ -36,38 +36,24 @@ def execute_sql(node_uri, n, s_n):
     :return: None.
     """
     host, port, f = ClusterCFG.parse_uri(node_uri)
+    handler = lambda e: ErrorHandle.fatal_handler('[Node ' + n + ']: ' + str(e))
 
     # Create our socket, and use this to seed random.
-    sock = ErrorHandle.create_client_socket(host, port)
-    random.seed(sock.getsockname())
-    if ErrorHandle.is_error(sock):
-        print('Error: Node ' + str(n) + '-' + sock)
-        return
+    sock = Network.open_client(host, port, handler)
 
     # Pickle our command list ('E', filename, and SQL), and send our message.
-    ErrorHandle.write_socket(sock, ['E', f, s_n])
+    Network.write(sock, ['E', f, s_n])
 
-    # Wait for a response.
-    r = ErrorHandle.read_socket(sock)
-    if ErrorHandle.is_error(r):
-        print('Error: Node ' + str(n) + ' - ' + r), sock.close()
-        return
-
-    operation, resultant = r
-    if isinstance(resultant, str):
-        print('Node ' + str(n) + ': ' + resultant)
-    else:
-        print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
+    # Wait for a response to be sent back, and print the response.
+    a = Network.read(sock, handler)
+    operation, resultant = ErrorHandle.act_upon_error(a, handler, True)
+    print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
 
     # Repeat. Operation code 'ES' marks the start of a message, and 'EZ' marks the end.
     while operation != 'EZ':
-        r = ErrorHandle.read_socket(sock)
-        if ErrorHandle.is_error(r):
-            print('Error: Node ' + str(n) + ' - ' + r)
-            return
-        else:
-            operation, resultant = r
-            print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
+        a = Network.read(sock, handler)
+        operation, resultant = ErrorHandle.act_upon_error(a, handler, True)
+        print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
 
     # End is reached. The operation was successful.
     successful_nodes.append(int(n))
@@ -77,31 +63,23 @@ def execute_sql(node_uri, n, s_n):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 runSSQL.py [clustercfg] [sqlfile]'), exit(2)
+        ErrorHandle.fatal_handler('Usage: python3 runSSQL.py [clustercfg] [ddlfile]')
 
-    # Parse both the clustercfg and sqlfile. Ensure that both are properly formatted.
-    catalog_uri, s = ClusterCFG.catalog_uri(sys.argv[1]), SQLFile.as_string(sys.argv[2])
-    if ErrorHandle.is_error(catalog_uri):
-        print(catalog_uri), exit(3)
-    elif ErrorHandle.is_error(s):
-        print(s), exit(4)
+    # Collect the catalog node URI and the SQL file.
+    catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),
+                                             ErrorHandle.fatal_handler, True)
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]),
+                                   ErrorHandle.fatal_handler, True)
 
     # Determine the working table.
-    t_table = SQLFile.table(s)
-    if ErrorHandle.is_error(t_table):
-        print(t_table), exit(6)
+    t_table = ErrorHandle.act_upon_error(SQLFile.table(s), ErrorHandle.fatal_handler, True)
 
     # Collect our node URIs. Do not proceed if the catalog node cannot be reached.
-    node_uris = RemoteCatalog.return_node_uris(catalog_uri, t_table)
-    if ErrorHandle.is_error(node_uris):
-        print(node_uris), exit(5)
+    r = RemoteCatalog.return_node_uris(catalog_uri, t_table)
+    node_uris = ErrorHandle.act_upon_error(r, ErrorHandle.fatal_handler, True)
 
     # For every node in the cluster, execute the given statement and display any errors.
-    threads = []
-    for i, node in enumerate(node_uris):
-        threads.append(Thread(target=execute_sql, args=(node, i + 1, s)))
-        threads[i].start()
-    [b.join() for b in threads]
+    Parallel.execute_n(node_uris, execute_sql, lambda i, b: (b, i + 1, s))
 
     # Display a summary: which nodes were successful and which nodes were not.
     print('\nSummary: ')
