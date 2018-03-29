@@ -16,12 +16,16 @@ Usage: LocalCatalog.create_dtable([catalog database filename])
 
 import sqlite3 as sql
 
+from lib.database import Database
 from lib.dissect import SQLFile, ClusterCFG
 from lib.error import ErrorHandle
+from lib.network import Network
 
 
 class LocalCatalog:
-    """ All catalog operations for the catalog node itself (operating locally). """
+    """ All catalog operations for the catalog node itself (operating locally). Errors here are
+    handled by raising an exception. parDBd is meant to catch these errors and send these over to
+    the client. """
 
     @staticmethod
     def create_dtable(f):
@@ -32,18 +36,18 @@ class LocalCatalog:
         :return: None.
         """
 
-        conn, cur = ErrorHandle.sql_connect(f)
-        cur.execute('CREATE TABLE IF NOT EXISTS dtables ('
-                    'tname CHARACTER(32), '
-                    'nodedriver CHARACTER(64), '
-                    'nodeurl CHARACTER(128), '
-                    'nodeuser  CHARACTER(16), '
-                    'nodepasswd  CHARACTER(16), '
-                    'partmtd INT, '
-                    'nodeid INT, '
-                    'partcol CHARACTER(32), '
-                    'partparam1 CHARACTER(128), '
-                    'partparam2 CHARACTER(128)); ')
+        conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+        Database.execute(cur, 'CREATE TABLE IF NOT EXISTS dtables ('
+                              'tname CHARACTER(32), '
+                              'nodedriver CHARACTER(64), '
+                              'nodeurl CHARACTER(128), '
+                              'nodeuser  CHARACTER(16), '
+                              'nodepasswd  CHARACTER(16), '
+                              'partmtd INT, '
+                              'nodeid INT, '
+                              'partcol CHARACTER(32), '
+                              'partparam1 CHARACTER(128), '
+                              'partparam2 CHARACTER(128)); ', ErrorHandle.raise_handler)
 
     @staticmethod
     def _perform_ddl(cur, ddl, table, node_uris):
@@ -55,24 +59,24 @@ class LocalCatalog:
 
         # Perform the DROP DDL.
         if SQLFile.is_drop_ddl(ddl):
-            cur.execute('DELETE FROM dtables W'
-                        'HERE tname = ?', (table,))
-            return 'Success'
+            Database.execute(cur, 'DELETE FROM dtables '
+                                  'WHERE tname = ?', ErrorHandle.raise_handler, (table,))
+            return
 
         # If the table exists, do not proceed. Exit with an error.
-        e = cur.execute('SELECT 1 '
-                        'FROM dtables '
-                        'WHERE tname = ? '
-                        'LIMIT 1',
-                        (table,)).fetchone()
-        if e is not None:
-            return 'Error: Table exists in cluster.'
+        e = Database.execute(cur, 'SELECT 1 '
+                                  'FROM dtables '
+                                  'WHERE tname = ? '
+                                  'LIMIT 1', ErrorHandle.raise_handler, (table,), True)
+        if len(e) != 0:
+            raise sql.Error(ErrorHandle.wrap_error_tag('Table exists in cluster.'))
 
         # Perform the INSERTION DDL.
         tuples = [(table, node_uris[i], i + 1) for i in range(len(node_uris))]
-        cur.executemany('INSERT INTO dtables '
-                        'VALUES (?, NULL, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL)',
-                        tuples)
+        Database.executemany(cur, 'INSERT INTO dtables '
+                                  'VALUES (?, NULL, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL)',
+                             ErrorHandle.raise_handler, tuples)
+
 
     @staticmethod
     def record_ddl(k, r):
@@ -87,30 +91,20 @@ class LocalCatalog:
         f, node_uris, ddl = r[1:4]
 
         # Connect to SQLite database using the filename.
-        c = ErrorHandle.sql_connect(f, lambda a: ErrorHandle.write_socket(k, str(a)))
-        if ErrorHandle.is_error(c):
-            return
-        conn, cur = c
+        conn, cur = Database.connect(f, ErrorHandle.raise_handler)
 
         # Create the table if it does not exist.
         LocalCatalog.create_dtable(f)
 
         # Determine the table being operated on in the DDL.
-        table = SQLFile.table(ddl)
-        if ErrorHandle.is_error(table):
-            ErrorHandle.write_socket(k, table)
-            return
+        table = ErrorHandle.act_upon_error(SQLFile.table(ddl), ErrorHandle.raise_handler, True)
 
         # Assemble our tuples and perform the insertion/deletion.
-        r = ErrorHandle.attempt_operation(lambda: LocalCatalog._perform_ddl(cur, ddl, table,
-                                                                            node_uris), sql.Error)
+        LocalCatalog._perform_ddl(cur, ddl, table, node_uris)
+        conn.commit()
 
-        # Handle the errors.
-        if ErrorHandle.is_error(r):
-            ErrorHandle.write_socket(k, r), conn.rollback(), conn.close()
-        else:
-            conn.commit(), conn.close()
-            ErrorHandle.write_socket(k, ['EC', 'Success'])
+        # If we have reached this point, we are successful. Send the appropriate message.
+        Network.write(k, ['EC', 'Success'])
 
     @staticmethod
     def _record_specific_partition(r_d, numnodes, cur):
@@ -124,27 +118,30 @@ class LocalCatalog:
         # No partitioning has been specified. Create the appropriate entries.
         if r_d['partmtd'] == 0:
             for i in range(1, numnodes + 1):
-                cur.execute('UPDATE dtables '
-                            'SET partmtd = 0 '
-                            'WHERE nodeid = ? AND tname = ?',
-                            (i, r_d['tname']))
+                Database.execute(cur, 'UPDATE dtables '
+                                      'SET partmtd = 0 '
+                                      'WHERE nodeid = ? AND tname = ?',
+                                 ErrorHandle.raise_handler, (i, r_d['tname']))
 
         # Range partitioning has been specified. Create the appropriate entries.
-        if r_d['partmtd'] == 1:
+        elif r_d['partmtd'] == 1:
             for i in range(1, numnodes + 1):
-                cur.execute('UPDATE dtables '
-                            'SET partcol = ?, partparam1 = ?, partparam2 = ?, partmtd = 1 '
-                            'WHERE nodeid = ? AND tname = ?',
-                            (r_d['partcol'], r_d['param1'][i - 1], r_d['param2'][i - 1],
-                             i, r_d['tname']))
+                Database.execute(cur, 'UPDATE dtables '
+                                      'SET partcol = ?, partparam1 = ?, '
+                                      'partparam2 = ?, partmtd = 1 '
+                                      'WHERE nodeid = ? AND tname = ?',
+                                 ErrorHandle.raise_handler,
+                                 (r_d['partcol'], r_d['param1'][i - 1], r_d['param2'][i - 1], i,
+                                  r_d['tname']))
 
         # Hash partitioning has been specified. Create the appropriate entries.
         elif r_d['partmtd'] == 2:
             for i in range(1, numnodes + 1):
-                cur.execute('UPDATE dtables '
-                            'SET partcol = ?, partparam1 = ?, partmtd = 2 '
-                            'WHERE nodeid = ? AND tname = ?',
-                            (r_d['partcol'], r_d['param1'], i, r_d['tname']))
+                Database.execute(cur, 'UPDATE dtables '
+                                      'SET partcol = ?, partparam1 = ?, partmtd = 2 '
+                                      'WHERE nodeid = ? AND tname = ?',
+                                 ErrorHandle.raise_handler,
+                                 (r_d['partcol'], r_d['param1'], i, r_d['tname']))
 
     @staticmethod
     def record_partition(k, r):
@@ -157,24 +154,19 @@ class LocalCatalog:
         :param r: Command list passed through the same socket.
         :return: None.
         """
-        f, r_d, numnodes = r[1:4]
+        f, r_d, numnodes = r[1], r[2], r[3]
 
         # Connect to SQLite database using the filename.
-        c = ErrorHandle.sql_connect(f, lambda a: ErrorHandle.write_socket(k, str(a)))
-        if ErrorHandle.is_error(c):
-            return
-        conn, cur = c
+        conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+        sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
         # Record the partition.
-        if ErrorHandle.is_error(ErrorHandle.attempt_operation(
-                lambda: LocalCatalog._record_specific_partition(r_d, numnodes, cur), sql.Error,
-                lambda a: ErrorHandle.write_socket(k, str(a)))):
-            conn.rollback(), conn.close()
-            return
+        e = lambda: LocalCatalog._record_specific_partition(r_d, numnodes, cur)
+        ErrorHandle.attempt_operation(e, sql.Error, sql_handler)
 
-        # No errors have occured. Send the success message.
+        # No errors have occurred. Send the success message.
         conn.commit(), conn.close()
-        ErrorHandle.write_socket(k, ['EK', 'Success'])
+        Network.write(k, ['EK', 'Success'])
 
     @staticmethod
     def return_node_uris(k, r):
@@ -186,28 +178,28 @@ class LocalCatalog:
         :param r: Command list passed through the same socket.
         :return: None.
         """
-        f, tname = r[1:3]
+        f, tname = r[1], r[2]
 
         # Connect to the catalog.
-        c = ErrorHandle.sql_connect(f, lambda a: ErrorHandle.write_socket(k, str(a)))
-        if ErrorHandle.is_error(c):
-            return
-        conn, cur = c
+        conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+        sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
         # Grab the node URIs belonging to the given table. Return the results.
-        p = ErrorHandle.sql_execute(cur, 'SELECT nodeurl FROM dtables WHERE tname = ?',
-                                    lambda a: ErrorHandle.write_socket(k, str(a)) \
-                                              and conn.rollback(),
-                                    (tname,), True)
-
+        p = Database.execute(cur, 'SELECT nodeurl '
+                                  'FROM dtables '
+                                  'WHERE tname = ?', sql_handler, (tname,), True)
         conn.close()
-        if not ErrorHandle.is_error(p):
-            ErrorHandle.write_socket(k, 'Error: Table ' + tname + ' not found.' if len(p) == 0
-                                     else ['EU', p])
+
+        # If there exist no tables here, throw an error.
+        if len(p) == 0:
+            raise sql.Error(ErrorHandle.wrap_error_tag('Table ' + tname + ' not found.'))
+        else:
+            Network.write(k, ['EU', p])
 
 
 class RemoteCatalog:
-    """ All catalog operations on general nodes (i.e. calls the catalog node). """
+    """ All catalog operations on general nodes (i.e. calls the catalog node). These are
+    non-fatal, and a string or boolean error is returned instead. """
 
     @staticmethod
     def ping(c):
@@ -220,9 +212,14 @@ class RemoteCatalog:
         host, port, f = ClusterCFG.parse_uri(c)
 
         # Create our socket and attempt to connect.
-        sock = ErrorHandle.create_client_socket(host, port)
+        sock = Network.open_client(host, port)
         if ErrorHandle.is_error(sock):
             return False
+
+        # Send a dummy message. Response must not be an error.
+        response = Network.write(sock, ['YY'])
+        if ErrorHandle.is_error(response):
+            return response
 
         sock.close()
         return True
@@ -241,26 +238,23 @@ class RemoteCatalog:
         """
         host, port, f = ClusterCFG.parse_uri(c)
 
+        # Only proceed if there exists at least one successful node.
+        if len(success_nodes) == 0:
+            return ErrorHandle.wrap_error_tag('No nodes were successful.')
+
         # Create our socket.
-        sock = ErrorHandle.create_client_socket(host, port)
+        sock = Network.open_client(host, port)
         if ErrorHandle.is_error(sock):
-            return 'Error: Socket could not be established.'
+            sock.close()
+            return ErrorHandle.wrap_error_tag('Socket could not be established.')
 
-        # Pickle our command list ('C', cluster, and DDL), and send our message.
-        r = 'Error: No nodes were successful.'
-        if len(success_nodes) != 0:
-            ErrorHandle.write_socket(sock, ['C', f, success_nodes, ddl])
+        # Otherwise, record the DDl.
+        Network.write(sock, ['C', f, success_nodes, ddl])
 
-            # Wait for a response to be sent back, and return this response.
-            r = ErrorHandle.read_socket(sock)
-        sock.close()
-
-        # Check for errors in the response.
-        if ErrorHandle.is_error(r):
-            return r
-        elif r[0] != 'EC' or r[1] != 'Success':
-            return 'Error: Response not as expected.'
-        else:
+        # Wait for a response to be sent back, and return the appropriate message.
+        net_handler = lambda e: Network.close_wrapper(e, ErrorHandle.default_handler, sock)
+        if not ErrorHandle.is_error(Network.read(sock, net_handler)):
+            sock.close()
             return 'Success.'
 
     @staticmethod
@@ -275,25 +269,23 @@ class RemoteCatalog:
         host, port, f = ClusterCFG.parse_uri(c)
 
         # Create our socket.
-        sock = ErrorHandle.create_client_socket(host, port)
+        sock = Network.open_client(host, port)
         if ErrorHandle.is_error(sock):
-            return sock
+            return ErrorHandle.wrap_error_tag('Socket could not be established.')
 
         # Pickle our command list ('U', filename, and tname), and send our message.
-        ErrorHandle.write_socket(sock, ['U', f, tname])
+        Network.write(sock, ['U', f, tname])
 
         # Wait for a response to be sent back, and record this response.
-        r = ErrorHandle.read_socket(sock)
-        sock.close()
-        if ErrorHandle.is_error(r):
-            return r
+        net_handler = lambda e: Network.close_wrapper(e, ErrorHandle.default_handler, sock)
+        response = Network.read(sock, net_handler)
 
-        # Confirm the returned operation code.
-        if r[0] != 'EU':
-            return 'Error: Return message not as expected.'
-        else:
-            # Flatten the returned list.
-            return [x[0] for x in r[1]]
+        # If an error exists, return the error.
+        if ErrorHandle.is_error(response):
+            return response
+
+        # Otherwise, return the node URIs.
+        return [x[0] for x in response[1]]
 
     @staticmethod
     def update_partition(c, r_d, numnodes):
@@ -309,18 +301,20 @@ class RemoteCatalog:
         host, port, f = ClusterCFG.parse_uri(c)
 
         # Create our socket.
-        sock = ErrorHandle.create_client_socket(host, port)
+        sock = Network.open_client(host, port)
         if ErrorHandle.is_error(sock):
-            return sock
+            return ErrorHandle.wrap_error_tag('Socket could not be established.')
 
         # Pickle our command list ('K', f, r_d, numnodes), and send our message.
-        ErrorHandle.write_socket(sock, ['K', f, r_d, numnodes])
-        r = ErrorHandle.read_socket(sock)
+        Network.write(sock, ['K', f, r_d, numnodes])
 
-        # Handle our errors appropriately.
-        if ErrorHandle.is_error(r):
-            return r
-        elif r[0] == 'EK' and r[1] == 'Success':
-            return 'Success'
-        else:
-            return 'Error: Returned message is not as expected.'
+        # Wait for a response to be sent back, and record this response.
+        net_handler = lambda e: Network.close_wrapper(e, ErrorHandle.default_handler, sock)
+        response = Network.read(sock, net_handler)
+
+        # If an error exists, return the error.
+        if ErrorHandle.is_error(response):
+            return response
+
+        # Otherwise, return the success message.
+        return 'Success'

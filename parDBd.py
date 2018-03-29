@@ -19,16 +19,13 @@ Error: 2 - Incorrect number of arguments.
        3 - Unable to bind a socket with specified hostname and port.
 """
 
-import pickle
-import random
-import socket
-import string
 import sys
-import time
 
 from lib.catalog import LocalCatalog
+from lib.database import Database
 from lib.dissect import SQLFile, ClusterCFG
 from lib.error import ErrorHandle
+from lib.network import Network
 
 
 def insert_single_on_db(k_n, r):
@@ -39,22 +36,18 @@ def insert_single_on_db(k_n, r):
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
-    # Handle all errors by sending the error string through the socket.
     f, s, tup, r_i = r[1], r[2], r[3], r
-    handle_error = lambda a: ErrorHandle.write_socket(k_n, str(a))
 
     # Create our connection.
-    c = ErrorHandle.sql_connect(f, handle_error)
-    if ErrorHandle.is_error(c):
-        return
-    conn, cur = c
+    conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
-    # Execute the command. Return the error if any exist, or return a sucesss method.
-    if not ErrorHandle.is_error(ErrorHandle.sql_execute(cur, s, handle_error, tup)):
-        conn.commit(), conn.close()
-        ErrorHandle.write_socket(k_n, ['EY', 'Success'])
-    else:
-        conn.close()
+    # Execute the command. Return the error if any exist, or return a success method.
+    Database.execute(cur, s, sql_handler, tup)
+
+    # Return a success message.
+    conn.commit(), conn.close()
+    Network.write(k_n, ['EY', 'Success'])
 
 
 def insert_on_db(k_n, r):
@@ -65,39 +58,33 @@ def insert_on_db(k_n, r):
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
-    # Handle all errors by sending the error string through the socket.
-    f, s, tup, r_i, is_error = r[1], r[2], r[3], r, False
-    handle_error = lambda a: ErrorHandle.write_socket(k_n, str(a))
+    f, s, tup, r_i = r[1], r[2], r[3], r
+    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, k_n)
 
     # Create our connection.
-    c = ErrorHandle.sql_connect(f, handle_error)
-    if ErrorHandle.is_error(c):
-        return
-    conn, cur = c
+    conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
     while True:
         # Execute the command. Return the error if any exist.
-        if not ErrorHandle.is_error(ErrorHandle.sql_execute(cur, s, handle_error, tup)):
-            ErrorHandle.write_socket(k_n, ['EY', 'Success'])
+        Database.execute(cur, s, sql_handler, tup)
+        Network.write(k_n, ['EY', 'Success'])
 
         # Interpret the current operation code.
-        r_i = ErrorHandle.read_socket(k_n, handle_error)
-        if ErrorHandle.is_error(r_i):
-            continue
+        operation, _ = Network.read(k_n, net_handler)
 
-        # Stop if YZ or YY, proceed otherwise.
-        if r_i[0] == 'YY':
+        # Stop if YZ pr YY, proceed otherwise.
+        if operation == 'YY':
             break
-        elif r_i[0] == 'YZ' and not \
-                ErrorHandle.is_error(ErrorHandle.sql_execute(cur, s, handle_error, tup)):
-            ErrorHandle.write_socket(k_n, ['EY', 'Success'])
+        elif operation == 'YZ':
+            ErrorHandle.is_error(Database.execute(cur, s, sql_handler, tup))
             break
         else:
             f, s, tup = r_i[1], r_i[2], r_i[3]
 
     # Commit our changes and close our connection.
     conn.commit(), conn.close()
-    ErrorHandle.write_socket(k_n, ['EY', 'Success'])
+    Network.write(k_n, ['EY', 'Success'])
 
 
 def execute_on_db(k_n, r):
@@ -108,39 +95,27 @@ def execute_on_db(k_n, r):
     :param r: List passed to socket, containing the name of the database file and the SQL.
     :return: None.
     """
-    # Handle all errors by sending the error string through the socket.
-    f, s, result = r[1], r[2], []
-    handle_error = lambda a: ErrorHandle.write_socket(k_n, str(a))
+    f, s = r[1], r[2]
 
     # Create our connection.
-    c = ErrorHandle.sql_connect(f, handle_error)
-    if ErrorHandle.is_error(c):
-        return
-    conn, cur = c
-
-    # Message length must match. Return an error if this is false.
-    if len(r) != 3:
-        handle_error('Error: Incorrect number of items sent to socket.')
-        return
+    conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
     # Execute the command. Return the error if any exist.
-    result = ErrorHandle.sql_execute(cur, s, handle_error, fetch=True)
-    if ErrorHandle.is_error(result):
-        conn.close()
-        return
-    else:
-        conn.commit(), conn.close()
+    result = Database.execute(cur, s, sql_handler, fetch=True)
+    conn.commit(), conn.close()
 
     # If the statement is a selection, send all resulting tuples.
     if SQLFile.is_select(s):
         for i, r_t in enumerate(result):
             # If this is the last tuple, append the ending operation code.
-            ErrorHandle.write_socket(k_n, ['EZ' if i + 1 == len(result) else 'ES', r_t])
+            Network.write(k_n, ['EZ' if i + 1 == len(result) else 'ES', r_t])
         if len(result) == 0:
-            ErrorHandle.write_socket(k_n, ['EZ', 'No tuples found.'])
+            Network.write(k_n, ['EZ', 'No tuples found.'])
+
     else:
         # Otherwise, assume that the statement has passed.
-        ErrorHandle.write_socket(k_n, ['EZ', 'Success'])
+        Network.write(k_n, ['EZ', 'Success'])
 
 
 def return_columns(k_n, r):
@@ -150,64 +125,51 @@ def return_columns(k_n, r):
     :param r: List passed to socket, containing the name of the database file and the table name.
     :return: None.
     """
-    f, tname, col = r[1], r[2], []
-    c = ErrorHandle.sql_connect(f, lambda a: ErrorHandle.write_socket(k_n, str(a)))
-    if ErrorHandle.is_error(c):
-        return
-    conn, cur = c
+    f, tname = r[1], r[2]
+
+    # Create our connection.
+    conn, cur = Database.connect(f, ErrorHandle.raise_handler)
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
 
     # Execute the command. Return the error if any exist.
-    col = ErrorHandle.sql_execute(cur, 'SELECT * '
-                                       'FROM ' + tname + 'LIMIT 1;',
-                                  lambda a: ErrorHandle.write_socket(k_n, str(a)),
-                                  fetch=True, desc=True)
+    col = Database.description(cur, 'SELECT * '
+                                    'FROM ' + tname + 'LIMIT 1;', sql_handler)
     conn.close()
 
     # Return the column names.
-    if not ErrorHandle.is_error(col):
-        ErrorHandle.write_socket(k_n, ['EP', [col[i][0] for i in range(len(col))]])
+    Network.write(k_n, ['EP', [col[i][0] for i in range(len(col))]])
 
 
-def store_from_ship(sock_n, cur, temp_name):
+def store_from_ship(sock_n, conn, temp_name):
     """
 
     :param sock_n:
-    :param cur:
+    :param conn:
     :param temp_name:
     :return:
     """
-    # Wait for a response. Wait 1 second for other node to respond after.
-    r = ErrorHandle.read_socket(sock_n)
-    if ErrorHandle.is_error(r):
-        return r
-    time.sleep(1.0)
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
+    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, sock_n)
+
+    # Read from our socket.
+    operation, resultant = Network.read(sock_n, net_handler)
 
     # Execute the insertion.
-    operation, resultant = r
-    r = ErrorHandle.sql_execute(cur, 'INSERT INTO ' + temp_name +
-                                ' VALUES (' +
-                                ''.join(['?, ' for _ in range(len(resultant) - 1)]) + '?);',
-                                tup=resultant)
-    if ErrorHandle.is_error(r):
-        return r
+    Database.execute(conn.cursor(), 'INSERT INTO ' + temp_name +
+                     ' VALUES (' + ''.join(['?, ' for _ in range(len(resultant) - 1)]) + '?);',
+                     sql_handler, resultant)
 
     # Repeat. Operation code 'ES' marks the start of a message, and 'EZ' marks the end.
     while operation != 'EZ':
-        r = ErrorHandle.read_socket(sock_n)
-        if ErrorHandle.is_error(r):
-            return r
+        operation, resultant = Network.read(sock_n, net_handler)
 
-        operation, resultant = r
-        y = ErrorHandle.sql_execute(cur, 'INSERT INTO ' + temp_name +
-                                    ' VALUES (' +
-                                    ''.join(['?, ' for _ in range(len(resultant) - 1)]) + '?);',
-                                    tup=resultant)
-        if ErrorHandle.is_error(y):
-            return y
-    return 'Success'
+        # Perform the insertion again.
+        Database.execute(conn.cursor(), 'INSERT INTO ' + temp_name +
+                         ' VALUES (' + ''.join(['?, ' for _ in range(len(resultant) - 1)]) + '?);',
+                         sql_handler, resultant)
 
 
-def copy_table(k_n, cur, node, f_s, tnames):
+def copy_table(conn, node, f_s, tnames):
     """
 
     :param k_n:
@@ -217,30 +179,23 @@ def copy_table(k_n, cur, node, f_s, tnames):
     :param tnames:
     :return:
     """
-    # Create socket to secondary node.
+    sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
     host, port, f = ClusterCFG.parse_uri(node)
-    sock_n = ErrorHandle.create_client_socket(host, port)
-    if ErrorHandle.is_error(sock_n):
-        ErrorHandle.write_socket(k_n, sock_n)
-        sock_n.close()
-        return sock_n
+
+    # Create socket to secondary node.
+    sock_n = Network.open_client(host, port, ErrorHandle.raise_handler)
+    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, sock_n)
 
     # Grab the SQL used to create the table.
-    ErrorHandle.write_socket(sock_n, ['E', f_s[1], 'SELECT sql '
-                                                   'FROM sqlite_master '
-                                                   'WHERE name="{}"'.format(tnames[1])])
-    r = ErrorHandle.read_socket(sock_n)
-    if ErrorHandle.is_error(r):
-        sock_n.close()
-        return r
-    operation, create_sql = r
+    Network.write(sock_n, ['E', f_s[1], 'SELECT sql '
+                                        'FROM sqlite_master '
+                                        'WHERE name="{}"'.format(tnames[1])])
+    operation, create_sql = Network.read(sock_n, net_handler)
 
     # Execute the create table statement on the local database with a new table name.
-    new_table = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + 'TTTTT'
-    r = ErrorHandle.sql_execute(cur, create_sql[0].replace(tnames[1], new_table, 1) + ';')
-    if ErrorHandle.is_error(r):
-        sock_n.close()
-        return r
+    new_table = Database.random_name(False)
+    new_sql = create_sql[0].replace(tnames[1], new_table, 1) + ';'
+    Database.execute(conn.cursor(), new_sql, sql_handler)
 
     sock_n.close()
     return create_sql, new_table
@@ -254,38 +209,24 @@ def ship(k_n, r):
     :return:
     """
     f_s, tnames, node = r[1], r[2], r[3]
-    error_handle = lambda a: ErrorHandle.write_socket(k_n, str(a))
+    host, port, f = ClusterCFG.parse_uri(node)
 
     # Connect to local database.
-    c = ErrorHandle.sql_connect(f_s[0], error_handle)
-    if ErrorHandle.is_error(c):
-        return
-    conn, cur = c
+    conn, cur = Database.connect(f_s[0], ErrorHandle.raise_handler)
 
     # Copy the table from our remote node to our local node.
-    r = copy_table(k_n, cur, node, f_s, tnames)
-    if ErrorHandle.is_error(r):
-        error_handle(r)
-        return
-    create_sql, new_table = r
+    create_sql, new_table = copy_table(conn, node, f_s, tnames)
 
     # Create socket to secondary node.
-    host, port, f = ClusterCFG.parse_uri(node)
-    sock_n = ErrorHandle.create_client_socket(host, port)
-    if ErrorHandle.is_error(sock_n):
-        error_handle(sock_n)
-        return
+    sock_n = Network.open_client(host, port, ErrorHandle.raise_handler)
 
-    # Retrieve data from secondary node.
-    ErrorHandle.write_socket(sock_n, ['E', f_s[1], 'SELECT * FROM ' + tnames[1]])
-    r = store_from_ship(sock_n, cur, new_table)
-    if ErrorHandle.is_error(r):
-        error_handle(r)
-        return
+    # Retrieve data from the secondary node.
+    Network.write(sock_n, ['E', f_s[1], 'SELECT * FROM ' + tnames[1]])
+    store_from_ship(sock_n, conn, new_table)
 
     # Return the name of the table created if successful.
     conn.commit(), conn.close()
-    ErrorHandle.write_socket(k_n, ['EB', new_table])
+    Network.write(k_n, ['EB', new_table])
 
 
 def interpret(k_n, r):
@@ -300,7 +241,7 @@ def interpret(k_n, r):
 
     # If our response is not an list, return an error.
     if not hasattr(r, '__iter__'):
-        ErrorHandle.write_socket(k_n, 'Error: Input not a list.'), k_n.close()
+        Network.write(k_n, ErrorHandle.wrap_error_tag('Input not a list.'))
         return
 
     if r[0] == 'YS':
@@ -311,7 +252,7 @@ def interpret(k_n, r):
         insert_single_on_db(k_n, r)
     elif r[0] == 'YY':
         # Do not perform any action. Send a success message.
-        ErrorHandle.write_socket(k_n, ['EY', 'Success'])
+        Network.write(k_n, ['EY', 'Success'])
     elif r[0] == 'E':
         # Execute an operation on a database.
         execute_on_db(k_n, r)
@@ -331,8 +272,7 @@ def interpret(k_n, r):
         # Ship a table from a remote node to here, and perform a join.
         ship(k_n, r)
     else:
-        ErrorHandle.write_socket(k_n, 'Error: Operation code invalid.')
-
+        Network.write(k_n, ErrorHandle.wrap_error_tag('Operation code invalid.'))
 
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
@@ -341,24 +281,24 @@ if __name__ == '__main__':
         exit(2)
 
     # Create the socket.
-    sock = socket.socket()
-    r_n = ErrorHandle.attempt_operation(lambda: sock.bind((sys.argv[1], int(sys.argv[2]))),
-                                        OSError, lambda a: print('Error: ' + str(a)))
-    if ErrorHandle.is_error(r_n):
-        exit(3)
+    sock = Network.open_server(sys.argv[1], sys.argv[2], ErrorHandle.fatal_handler)
 
     while True:
         # Listen and wait for a connection on this socket.
         sock.listen(1)
         k, addr = sock.accept()
 
+        # Retrieve the sent data. Unpickle the data. Interpret the command.
         try:
-            # Retrieve the sent data. Unpickle the data. Interpret the command.
-            interpret(k, ErrorHandle.read_socket(k))
-        except EOFError as e:
-            ErrorHandle.write_socket(k, str(e))
-        except ConnectionResetError as e:
+            interpret(k, Network.read(k, ErrorHandle.raise_handler))
+
+        except ConnectionResetError:
             # Ignore when a connection is forcibly closed, or the socket has timed out.
             pass
 
+        except Exception as e:
+            # An exception has been thrown. Inform the client.
+            Network.write(k, ErrorHandle.wrap_error_tag(e))
+
+        # Close the current connection.
         k.close()

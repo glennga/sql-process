@@ -14,11 +14,12 @@ Error: 2 - Incorrect number of arguments.
 """
 
 import sys
-from threading import Thread
 
 from lib.catalog import RemoteCatalog
 from lib.dissect import ClusterCFG, SQLFile
 from lib.error import ErrorHandle
+from lib.network import Network
+from lib.parallel import Parallel
 
 # Used to store the node IDs of each **successful** execution.
 successful_nodes = []
@@ -34,61 +35,49 @@ def execute_ddl(node_uri, name, s_n):
     :return None.
     """
     [host, port, f], n = ClusterCFG.parse_uri(node_uri), name.split('.', 1)[0].split('node')[1]
+    handler = lambda e: ErrorHandle.fatal_handler('[Node ' + n + ']: ' + str(e))
 
     # Create our socket.
-    sock = ErrorHandle.create_client_socket(host, port)
-    if ErrorHandle.is_error(sock):
-        print('Error: Node -' + n + ' ' + sock), sock.close()
-        return
+    sock = Network.open_client(host, port, handler)
 
     # Pickle our command list ('E', filename, and DDL), and send our message.
-    ErrorHandle.write_socket(sock, ['E', f, s_n])
+    Network.write(sock, ['E', f, s_n])
 
     # Wait for a response to be sent back, and return the response.
-    r = ErrorHandle.read_socket(sock)
+    a = Network.read(sock, handler)
+    ErrorHandle.act_upon_error(a, handler)
 
-    # Display the error, and append to the success IDs list if appropriate.
-    if r[0] == 'EZ' and r[1] == 'Success':
-        print('Successful Execution on Node: ' + n), successful_nodes.append(int(n))
-    else:
-        print('Error: Node - ' + n + ' ' + r)
-
+    # Append the success to the successful nodes list.
+    print('Successful Execution on Node: ' + n), successful_nodes.append(int(n))
     sock.close()
 
 
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 runDDL.py [clustercfg] [ddlfile]'), exit(2)
+        ErrorHandle.fatal_handler('Usage: python3 runDDL.py [clustercfg] [ddlfile]')
 
     # Collect the catalog node URI and the DDL file.
-    catalog_uri, s = ClusterCFG.catalog_uri(sys.argv[1]), SQLFile.as_string(sys.argv[2])
-    if ErrorHandle.is_error(catalog_uri):
-        print(catalog_uri), exit(3)
-    elif ErrorHandle.is_error(s):
-        print(s), exit(4)
+    catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),
+                                             ErrorHandle.fatal_handler, True)
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]),
+                                   ErrorHandle.fatal_handler, True)
 
     # Test our connection to the catalog. Do not execute if logging cannot occur.
     if not RemoteCatalog.ping(catalog_uri):
-        print('Error: Cannot connect to the catalog. No statement executed.'), exit(5)
+        ErrorHandle.fatal_handler('Cannot connect to the catalog. No statement executed.')
 
     # Collect our node URIs. Do not proceed if these are not valid.
-    node_uris = ClusterCFG.node_uris(sys.argv[1])
-    if ErrorHandle.is_error(node_uris):
-        print(node_uris), exit(6)
+    node_uris = ErrorHandle.act_upon_error(ClusterCFG.node_uris(sys.argv[1]),
+                                           ErrorHandle.fatal_handler, True)
 
     # For every node in the cluster dictionary, execute the given statement and display any errors.
-    threads = []
-    for i, node in enumerate(node_uris):
-        threads.append(Thread(target=execute_ddl, args=(node, 'node' + str(i + 1), s)))
-        threads[i].start()
+    Parallel.execute_n(node_uris, execute_ddl, lambda i, b: (b, 'node' + str(i + 1), s))
 
-    # Wait until threads are finished. Update the metadata on the catalog node.
-    [b.join() for b in threads]
-    r_c = RemoteCatalog.record_ddl(catalog_uri, [e for i, e in enumerate(node_uris)
-                                                 if (i + 1) in successful_nodes], s)
-    if ErrorHandle.is_error(r_c):
-        print(r_c), exit(7)
+    # Update the metadata on the catalog node.
+    r = RemoteCatalog.record_ddl(catalog_uri, [e for i, e in enumerate(node_uris)
+                                               if (i + 1) in successful_nodes], s)
+    ErrorHandle.act_upon_error(r, ErrorHandle.fatal_handler, False)
 
     # Display a summary: which nodes were successful and which nodes were not.
     print('\nSummary: ')

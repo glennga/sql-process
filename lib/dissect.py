@@ -29,6 +29,16 @@ class SQLFile:
     """ All dissecting operations that deal with the SQL file. """
 
     @staticmethod
+    def _open_file(f):
+        """
+
+        :param f:
+        :return:
+        """
+        with open(f) as file_f:
+            return file_f.read()
+
+    @staticmethod
     def _generate_parse_tree(s):
         """
 
@@ -51,10 +61,16 @@ class SQLFile:
         :return: String associated with error if there exists no catalog hostname. Otherwise,
             the SQL to execute.
         """
-        s = ErrorHandle.open_file(f, lambda a: a.read())
+        s = ErrorHandle.attempt_operation(lambda: SQLFile._open_file(f), FileNotFoundError,
+                                          result=True)
 
-        # Returning a single element list here...
-        return 'No terminating semicolon.' if ';' not in s else s.split(';', 1)[0]
+        # Return any errors.
+        if ErrorHandle.is_error(s):
+            return s
+        elif ';' not in s:
+            return ErrorHandle.wrap_error_tag('No terminating semicolon.')
+        else:
+            return s.split(';', 1)[0]
 
     @staticmethod
     def is_join(s):
@@ -134,7 +150,7 @@ class SQLFile:
 
         # If there exists no table name, return false.
         if len(table_names) == 0:
-            return 'Error: No table exists.'
+            return ErrorHandle.wrap_error_tag('No table exists.')
         elif len(table_names) == 1:
             # If there exists one table, return that sole element.
             return table_names[0]
@@ -146,6 +162,16 @@ class ClusterCFG:
     """ All dissecting operations that deal with the clustercfg file. """
 
     @staticmethod
+    def _open_with_dummy(f):
+        """
+
+        :param f:
+        :return:
+        """
+        with open(f) as file_f:
+            return '[D]\n' + file_f.read()
+
+    @staticmethod
     def _construct_config_reader(f):
         """
 
@@ -155,11 +181,14 @@ class ClusterCFG:
         config = ConfigParser()
 
         # Append dummy section to given configuration file.
-        config_string = ErrorHandle.open_file(f, lambda a: '[D]\n' + a.read())
+        config_string = ErrorHandle.attempt_operation(lambda: ClusterCFG._open_with_dummy(f),
+                                                      FileNotFoundError, result=True)
+
+        # Return any errors if they exist.
         if ErrorHandle.is_error(config_string):
             return config_string
 
-        # Read the configuration file.
+        # Otherwise, read and return the config reader.
         config.read_string(config_string)
         return config
 
@@ -173,11 +202,11 @@ class ClusterCFG:
         :return: True if the desired function is to load a CSV. False if 'tablename' is
             not in config file. Otherwise, a string containing the error.
         """
-        r = ClusterCFG._construct_config_reader(f)
-        if ErrorHandle.is_error(r):
-            return r
+        result = ClusterCFG._construct_config_reader(f)
+        if ErrorHandle.is_error(result):
+            return result
 
-        return True if 'tablename' in r['D'] else False
+        return True if 'tablename' in result['D'] else False
 
     @staticmethod
     def parse_uri(node):
@@ -200,10 +229,12 @@ class ClusterCFG:
             the URI associated with the catalog node.
         """
         config = ClusterCFG._construct_config_reader(f)
+        if ErrorHandle.is_error(config):
+            return config
 
         # Determine the catalog URI.
         if not {'catalog.hostname'}.issubset([k for k in config['D']]):
-            return 'Error: \'catalog.hostname\' is not defined.'
+            return ErrorHandle.wrap_error_tag('\'catalog.hostname\' is not defined.')
         return config['D']['catalog.hostname']
 
     @staticmethod
@@ -214,23 +245,28 @@ class ClusterCFG:
         :return: String associated with error if the file is not formatted properly. Otherwise,
             a list of node URIs.
         """
-        config = ClusterCFG._construct_config_reader(f)
+        config, nodes = ClusterCFG._construct_config_reader(f), []
 
         # Ensure that 'numnodes' exist.
         if not {'numnodes'}.issubset([k for k in config['D']]):
-            return 'Error: \'numnodes\' is not defined.'
-        try:
-            n = int(config['D']['numnodes'])
-        except ValueError:
-            return 'Error: \'numnodes\' is not a valid integer.'
+            return ErrorHandle.wrap_error_tag('\'numnodes\' is not defined.')
+
+        # Ensure that 'numnodes' is a valid integer.
+        n = ErrorHandle.attempt_operation(lambda: int(config['D']['numnodes']),
+                                          ValueError, result=True)
+        if ErrorHandle.is_error(n):
+            return ErrorHandle.wrap_error_tag('\'numnodes\' is not a valid integer.')
 
         # Collect the node URIs.
-        nodes = []
-        try:
-            [nodes.append(config['D']['node' + str(i + 1) + '.hostname']) for i in range(n)]
+        collect_nodes = lambda: [nodes.append(config['D']['node' + str(i + 1) + '.hostname'])
+                                 for i in range(n)]
+        result = ErrorHandle.attempt_operation(collect_nodes, KeyError)
+
+        # If a KeyError is thrown, then the results were not formatted correctly.
+        if ErrorHandle.is_error(result):
+            return ErrorHandle.wrap_error_tag('Node entries not formatted correctly.')
+        else:
             return nodes
-        except KeyError:
-            return 'Error: Node entries not formatted correctly.'
 
     @staticmethod
     def _partition(p_m, r_d, config):
@@ -245,37 +281,31 @@ class ClusterCFG:
             formatted. Otherwise, the partitioning dictionary with the additional partitioning
             information.
         """
-        try:
-            if p_m.lower() == 'range':
-                inf_a = lambda b: float('inf') if b == '+inf' else \
-                    (-float('inf') if b == '-inf' else float(b))
+        if p_m.lower() == 'range':
+            inf_a = lambda b: float('inf') if b == '+inf' else \
+                (-float('inf') if b == '-inf' else float(b))
 
-                r_d.update({'partmtd': 1,
-                            'partcol': config['D']['partition.column'],
-                            'param1': [], 'param2': []})
+            r_d.update({'partmtd': 1,
+                        'partcol': config['D']['partition.column'],
+                        'param1': [], 'param2': []})
 
-                # For range partitioning, look for the 'partition.node[i]' entries.
-                for i in range(int(config['D']['numnodes'])):
-                    p1 = inf_a(config['D']['partition.node' + str(i + 1) + '.param1'])
-                    p2 = inf_a(config['D']['partition.node' + str(i + 1) + '.param2'])
-                    r_d['param1'].append(p1), r_d['param2'].append(p2)
+            # For range partitioning, look for the 'partition.node[i]' entries.
+            for i in range(int(config['D']['numnodes'])):
+                p1 = inf_a(config['D']['partition.node' + str(i + 1) + '.param1'])
+                p2 = inf_a(config['D']['partition.node' + str(i + 1) + '.param2'])
+                r_d['param1'].append(p1), r_d['param2'].append(p2)
 
-            elif p_m.lower() == 'hash':
-                r_d.update({'partmtd': 2,
-                            'partcol': config['D']['partition.column'],
-                            'param1': int(config['D']['partition.param1'])})
+        elif p_m.lower() == 'hash':
+            r_d.update({'partmtd': 2,
+                        'partcol': config['D']['partition.column'],
+                        'param1': int(config['D']['partition.param1'])})
 
-            elif p_m.lower() == 'notpartition':
-                r_d.update({'partmtd': 0})
+        elif p_m.lower() == 'notpartition':
+            r_d.update({'partmtd': 0})
 
-            else:
-                return 'Error: \'partition.method\' not in space [range, hash, notpartition].'
-
-        except KeyError as e:
-            return 'Error: Not found: ' + str(e)
-        except ValueError as e:
-            return 'Error: \'param1\', \'param2\', or \'numnodes\' is not formatted ' \
-                   'correctly - ' + str(e)
+        else:
+            return ErrorHandle.wrap_error_tag('\'partition.method\' not in space [range, hash, '
+                                              'notpartition].')
 
         return r_d
 
@@ -297,11 +327,15 @@ class ClusterCFG:
 
         # Determine the partitioning.
         if not {'partition.method', 'tablename'}.issubset([k for k in config['D']]):
-            return 'Error: \'partition.method\' or \'tablename\' is not defined.'
+            return ErrorHandle.wrap_error_tag('\'partition.method\' or \'tablename\' is '
+                                              'not defined.')
         r_d.update({'tname': config['D']['tablename']})
 
-        # Based on the partitioning specified, parse appropriate sections. Return error if exists.
-        r_d = ClusterCFG._partition(config['D']['partition.method'], r_d, config)
+        # Based on the partitioning specified, parse appropriate sections.
+        partition = lambda: ClusterCFG._partition(config['D']['partition.method'], r_d, config)
+        r_d = ErrorHandle.attempt_operation(partition, (KeyError, ValueError), result=True)
+
+        # Return error if exists.
         if ErrorHandle.is_error(r_d):
             return r_d
 
