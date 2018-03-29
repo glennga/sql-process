@@ -80,7 +80,7 @@ def insert_on_db(k_n, r):
             ErrorHandle.act_upon_error(Database.execute(cur, s, sql_handler, tup), net_handler)
             break
         else:
-            f, s, tup = r_i[1], r_i[2], r_i[3]
+            f, s, tup = result[1], result[2], result[3]
 
     # Commit our changes and close our connection.
     conn.commit(), conn.close()
