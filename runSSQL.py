@@ -5,7 +5,7 @@ Execute a single SQL statement that does not involve a join, on a cluster of com
 Usage: python runSSQL.py [clustercfg] [sqlfile]
 """
 
-import sys
+import sys, os
 
 from lib.catalog import RemoteCatalog
 from lib.dissect import SQLFile, ClusterCFG
