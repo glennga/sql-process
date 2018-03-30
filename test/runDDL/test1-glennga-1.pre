@@ -12,8 +12,6 @@ sqlite3 $BASEDIR/../data/node2.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS COMME
 sqlite3 $BASEDIR/../data/node3.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS COMMENTS; COMMIT;'
 
 # Also, delete any entries from our catalog node where tname is COMMENTS.
-if [[ -z $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND \
-    name="dtables";') ]]; then
-    sqlite3 $BASEDIR/../data/catalog.db 'BEGIN TRANSACTION; DELETE FROM dtables WHERE \
-        tname="COMMENTS"; COMMIT;'
+if [[ -z $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND name="dtables";') ]]; then
+    sqlite3 $BASEDIR/../data/catalog.db 'BEGIN TRANSACTION; DELETE FROM dtables WHERE tname="COMMENTS"; COMMIT;'
 fi

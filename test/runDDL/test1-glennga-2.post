@@ -10,4 +10,4 @@ sqlite3 $BASEDIR/../data/node3.db 'SELECT sql FROM sqlite_master WHERE name="ORD
 sqlite3 $BASEDIR/../data/catalog.db 'SELECT * FROM dtables WHERE tname="ORDERS";'
 
 # Kill our daemons.
-pkill -f parDBD
+pkill -f parDBd
