@@ -69,7 +69,7 @@ class SQLFile:
             the SQL to execute.
         """
         s = ErrorHandle.attempt_operation(lambda: SQLFile._open_file(f), FileNotFoundError,
-                                          result=True)
+                                          ErrorHandle.default_handler, True)
 
         # Return any errors.
         if ErrorHandle.is_error(s):
@@ -196,7 +196,8 @@ class ClusterCFG:
 
         # Append dummy section to given configuration file.
         config_string = ErrorHandle.attempt_operation(lambda: ClusterCFG._open_with_dummy(f),
-                                                      FileNotFoundError, result=True)
+                                                      FileNotFoundError,
+                                                      ErrorHandle.default_handler, True)
 
         # Return any errors if they exist.
         if ErrorHandle.is_error(config_string):
@@ -266,14 +267,14 @@ class ClusterCFG:
 
         # Ensure that 'numnodes' is a valid integer.
         n = ErrorHandle.attempt_operation(lambda: int(config['D']['numnodes']),
-                                          ValueError, result=True)
+                                          ValueError, ErrorHandle.default_handler, True)
         if ErrorHandle.is_error(n):
             return ErrorHandle.wrap_error_tag('\'numnodes\' is not a valid integer.')
 
         # Collect the node URIs.
         collect_nodes = lambda: [nodes.append(config['D']['node' + str(i + 1) + '.hostname'])
                                  for i in range(n)]
-        result = ErrorHandle.attempt_operation(collect_nodes, KeyError)
+        result = ErrorHandle.attempt_operation(collect_nodes, KeyError, ErrorHandle.default_handler)
 
         # If a KeyError is thrown, then the results were not formatted correctly.
         if ErrorHandle.is_error(result):
@@ -346,11 +347,12 @@ class ClusterCFG:
 
         # Based on the partitioning specified, parse appropriate sections.
         partition = lambda: ClusterCFG._partition(config['D']['partition.method'], r_d, config)
-        r_d = ErrorHandle.attempt_operation(partition, (KeyError, ValueError), result=True)
+        r_d = ErrorHandle.attempt_operation(partition, (KeyError, ValueError),
+                                            ErrorHandle.default_handler, True)
 
         # Return error if exists.
         if ErrorHandle.is_error(r_d):
-            return r_d
+            return r_d + ' is not properly formatted or does not exist.'
 
         # Determine the node count to pass out.
         numnodes = 0

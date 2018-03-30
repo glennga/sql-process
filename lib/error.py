@@ -23,10 +23,10 @@ class ErrorHandle:
     """
 
     @staticmethod
-    def default_handler(_):
+    def default_handler(e):
         """ Default error handler for exception. Does nothing.
 
-        :param _: The exception thrown.
+        :param e: The exception thrown.
         :return: None.
         """
         pass
@@ -78,7 +78,7 @@ class ErrorHandle:
             return 'Error: ' + str(i)
 
     @staticmethod
-    def act_upon_error(i, handler=default_handler, result=False):
+    def act_upon_error(i, handler, result=False):
         """ If 'i' represents an error, then pass it through the given handler. Otherwise,
         return the object or a success message. Useful shorthand for constant error checking.
 
@@ -94,7 +94,7 @@ class ErrorHandle:
             return 'Success' if not result else i
 
     @staticmethod
-    def attempt_operation(operation, watch, handler=default_handler, result=False):
+    def attempt_operation(operation, watch, handler, result=False):
         """ Attempt some operation and watch for some exception. In the event we catch what we
         are looking for, handle the operation. This differs from 'act_upon_error' in that we
         perform our operation here, instead of being passed the result and performing the

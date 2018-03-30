@@ -94,7 +94,8 @@ def read_csv(f_l):
 
         return csv_l
 
-    return ErrorHandle.attempt_operation(_read, FileNotFoundError, result=True)
+    return ErrorHandle.attempt_operation(_read, FileNotFoundError, ErrorHandle.default_handler,
+                                         True)
 
 
 def nopart_load(n, c, r_dl, f_l):
@@ -149,7 +150,8 @@ def hashpart_load(n, c, r_dl, f_l):
     :return: None.
     """
     # 'param1' is the number of nodes.
-    p = ErrorHandle.attempt_operation(lambda: int(r_dl['param1']), ValueError, result=True)
+    p = ErrorHandle.attempt_operation(lambda: int(r_dl['param1']), ValueError,
+                                      ErrorHandle.default_handler, True)
     ErrorHandle.act_upon_error(p, ErrorHandle.fatal_handler)
 
     # Determine the index of the partitioned column.
@@ -201,8 +203,7 @@ def rangepart_load(n, c, r_dl, f_l):
 
     # Determine the index of the partitioned column.
     y = ErrorHandle.attempt_operation(lambda: r_dl['col_s'].index(r_dl['partcol']),
-                                      (ValueError, KeyError), result=True)
-    ErrorHandle.act_upon_error(y, ErrorHandle.fatal_handler)
+                                      (ValueError, KeyError), ErrorHandle.fatal_handler, True)
 
     # Construct a list of insertion strings.
     csv_l = ErrorHandle.act_upon_error(read_csv(f_l), ErrorHandle.fatal_handler, True)

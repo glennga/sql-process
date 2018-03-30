@@ -75,14 +75,14 @@ def remove_temp_table(node_uri, table):
 
 
 def ship_to_remote(host, port, f, t_tables_n, nu_2_n):
-    """ Given a
+    """ Inform one node to request a table from another.
 
-    :param host:
-    :param port:
-    :param f:
-    :param t_tables_n:
-    :param nu_2_n:
-    :return:
+    :param host: Hostname of the node to send the request to (the "source").
+    :param port: Port of the node to send the request to.
+    :param f: List of filenames associated with the database, in order of source, remote.
+    :param t_tables_n: List of table names associated with the join, in order of source, remote.
+    :param nu_2_n: URI of the node for the source to retrieve the remote table from.
+    :return: The temporary table name that results from the ship.
     """
     # Create the socket to the first node.
     sock = Network.open_client(host, port, ErrorHandle.fatal_handler)
@@ -107,9 +107,9 @@ def execute_join(nu_1_n, nu_2_n, n, s_n, t_tables_n):
     :param nu_1_n: Node URI of the first node to join (and to store the result to).
     :param nu_2_n: Node URI of the second node to join.
     :param n: Join number that this operation is working on.
-    :param s_n: Join statement to execute ........... TODO FINISH THIS
-    :param t_tables_n: asdsasdasd
-    :return:
+    :param s_n: Join statement to execute.
+    :param t_tables_n: Tables involved in the join, in order of node 1, node 2.
+    :return: None.
     """
     host_1, port_1, f_1 = ClusterCFG.parse_uri(nu_1_n)
     host_2, port_2, f_2 = ClusterCFG.parse_uri(nu_2_n)
@@ -142,11 +142,12 @@ def execute_join(nu_1_n, nu_2_n, n, s_n, t_tables_n):
 
 
 def execute_union(source_list, join_list):
-    """
+    """ Given source and remote nodes, ship a given table to the source. From here,
+    the set difference is obtained from the two, and is inserted into the source (union).
 
-    :param source_list:
-    :param join_list:
-    :return:
+    :param source_list: List containing the URI and table of the source.
+    :param join_list: List containing the URI and the table of the remote.
+    :return: None.
     """
     master_node_uri, master_table = source_list
     slave_node_uri, slave_table = join_list
@@ -178,10 +179,11 @@ def execute_union(source_list, join_list):
 
 
 def display_join(master_list):
-    """
+    """ Display the result of the join in pipe-delimited format. This result should be stored in
+    a single table, whose URI and table name is specified in the given list.
     
-    :param master_list:
-    :return: 
+    :param master_list: List containing the URI and table name of the node holding the result.
+    :return: None.
     """
     node_uri, table = master_list
     host, port, f = ClusterCFG.parse_uri(node_uri)
@@ -203,7 +205,7 @@ def display_join(master_list):
     while operation != 'EZ':
         a = Network.read(sock, net_handler)
         operation, resultant = ErrorHandle.act_upon_error(a, net_handler, True)
-        print('[' + ''.join([str(x) + ', ' for x in resultant]) + ']')
+        print('| |' + ''.join([str(x) + ' | ' for x in resultant]) + '|')
 
     sock.close()
 

@@ -291,7 +291,7 @@ class RemoteCatalog:
     @staticmethod
     def update_partition(c, r_d, numnodes):
         """ Update the partition information in the catalog node, after performing the runLCSV
-        operaton.
+        operation.
 
         :param c: Node URI of the catalog node to read from.
         :param r_d: Partition dictionary used to execute runLCSV.

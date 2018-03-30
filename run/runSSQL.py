@@ -38,13 +38,19 @@ def execute_sql(node_uri, n, s_n):
     # Wait for a response to be sent back, and print the response.
     a = Network.read(sock, handler)
     operation, resultant = ErrorHandle.act_upon_error(a, handler, True)
-    print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
+    if resultant != 'No tuples found.':
+        print('Node ' + str(n) + ': | |' + ''.join([str(x) + ' | ' for x in resultant]) + '|')
+    else:
+        print('Node ' + str(n) + ': | | No tuples found. | |')
 
     # Repeat. Operation code 'ES' marks the start of a message, and 'EZ' marks the end.
     while operation != 'EZ':
         a = Network.read(sock, handler)
         operation, resultant = ErrorHandle.act_upon_error(a, handler, True)
-        print('Node ' + str(n) + ': [' + ''.join([str(x) + ', ' for x in resultant]) + ']')
+        if resultant != 'No tuples found.':
+            print('Node ' + str(n) + ': | |' + ''.join([str(x) + ' | ' for x in resultant]) + '|')
+        else:
+            print('Node ' + str(n) + ': | | No tuples found. | |')
 
     # End is reached. The operation was successful.
     successful_nodes.append(int(n))
