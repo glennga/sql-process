@@ -2,9 +2,9 @@
 BASEDIR=$(dirname "$0")
 
 # Start the daemons for all nodes.
-python3 $BASEDIR/../../parDBd.py 192.168.0.13 50001
-python3 $BASEDIR/../../parDBd.py 192.168.0.13 50002
-python3 $BASEDIR/../../parDBd.py 192.168.0.13 50003
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50001 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50002 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50003 &
 
 # Delete any tables in our nodes that are named COMMENTS.
 sqlite3 $BASEDIR/../data/node1.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS COMMENTS; COMMIT;'
@@ -12,8 +12,8 @@ sqlite3 $BASEDIR/../data/node2.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS COMME
 sqlite3 $BASEDIR/../data/node3.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS COMMENTS; COMMIT;'
 
 # Also, delete any entries from our catalog node where tname is COMMENTS.
-if [ $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND
+if [ $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND \
     name="dtables";) -eq '1' ] then
-    sqlite3 $BASEDIR/../data/catalog.db 'BEGIN TRANSACTION; DELETE FROM dtables WHERE
+    sqlite3 $BASEDIR/../data/catalog.db 'BEGIN TRANSACTION; DELETE FROM dtables WHERE \
         tname="COMMENTS";'
 fi
