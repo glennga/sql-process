@@ -9,12 +9,6 @@ Executes various functions on a cluster of nodes. Function is determined using t
 | NOT tablename                   | Joins are present    | Execute (join) SQL across the cluster.
 
 Usage: python runSQL.py [clustercfg] [sqlfile/csvfile]
-
-TODO: Finish the error codes below.
-Error: 2 - Incorrect number of arguments.
-       3 - There exists an error with the clustercfg file.
-       4 - There exists an error with the SQL file.
-
 """
 
 import os
@@ -25,24 +19,20 @@ from lib.dissect import ClusterCFG, SQLFile
 from lib.error import ErrorHandle
 
 if __name__ == '__main__':
-    # Ensure that we have only two arguments.
+    # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 runSQL.py [clustercfg] [sqlfile/csvfile]'), exit(2)
+        ErrorHandle.fatal_handler('python3 runSQL.py [clustercfg] [sqlfile/csvfile]')
 
-    r = ClusterCFG.is_runLSCV(sys.argv[1])
-    if ErrorHandle.is_error(r):
-        print('Error: ' + r), exit(3)
-
-    # The user wants to load a CSV.
+    # Determine if the user wants to load a CSV file.
+    r = ErrorHandle.act_upon_error(ClusterCFG.is_runLSCV(sys.argv[1]), ErrorHandle.fatal_handler,
+                                   True)
     if r:
         print('Desired Function: Bulk CSV load')
         exit(subprocess.call(['python' + ('3' if (os.name != 'nt') else ''), 'run/runLCSV.py',
                               sys.argv[1], sys.argv[2]]))
 
-    # The user wants to execute some SQL, we look at the SQL file.
-    s = SQLFile.as_string(sys.argv[2])
-    if ErrorHandle.is_error(s):
-        print(s), exit(4)
+    # Otherwise, the user wants to execute some SQL, we look at the SQL file.
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]), ErrorHandle.fatal_handler, True)
 
     # The user wants to execute a DDL.
     if SQLFile.is_ddl(s):

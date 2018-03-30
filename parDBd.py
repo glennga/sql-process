@@ -14,9 +14,6 @@ OP : 'YS' -> Execute an insertion SQL statement, and wait for additional stateme
    : 'B' -> Ship a given table to the current node.
 
 Usage: python parDBd.py [hostname] [port]
-
-Error: 2 - Incorrect number of arguments.
-       3 - Unable to bind a socket with specified hostname and port.
 """
 
 import sys
@@ -34,7 +31,7 @@ def execute_prepared(k_n, r):
     terminating operation code.
 
     :param k_n: Socket connection to send response through.
-    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :param r: Command list passed through the same socket.
     :return: None.
     """
     f, s, tup, r_i = r[1], r[2], r[3], r
@@ -56,7 +53,7 @@ def execute_multiple_prepared(k_n, r):
     terminating 'YZ' and 'YY' operation codes.
 
     :param k_n: Socket connection to send response through.
-    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :param r: Command list passed through the same socket.
     :return: None.
     """
     f, s, tup, r_i = r[1], r[2], r[3], r
@@ -93,7 +90,7 @@ def execute_on_db(k_n, r):
     statement is a SELECT statement.
 
     :param k_n: Socket connection to send response through.
-    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :param r: Command list passed through the same socket.
     :return: None.
     """
     f, s = r[1], r[2]
@@ -123,7 +120,7 @@ def return_columns(k_n, r):
     """ Return the columns associated with a table through the given socket.
 
     :param k_n: Socket connection to send response through.
-    :param r: List passed to socket, containing the name of the database file and the table name.
+    :param r: Command list passed through the same socket.
     :return: None.
     """
     f, tname = r[1], r[2]
@@ -142,12 +139,14 @@ def return_columns(k_n, r):
 
 
 def store_from_ship(sock_n, conn, temp_name):
-    """
+    """ Helper method for the ship procedure. The initial request for tuples is sent outside of
+    here, but this handles all subsequent requests. Tuples are then stored in the table that was
+    just created (pass in temp_name).
 
-    :param sock_n:
-    :param conn:
-    :param temp_name:
-    :return:
+    :param k_n: Socket connection to send response through.
+    :param conn: Cursor to an open database connection.
+    :param temp_name: Name of the table created to store the results.
+    :return: None.
     """
     sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
     net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, sock_n)
@@ -175,14 +174,16 @@ def store_from_ship(sock_n, conn, temp_name):
 
 
 def copy_table(conn, node, f_s, tnames):
-    """
+    """ Helper method for the ship procedure. This copies the schema from the other table by
+    requesting the 'sql' field from the metadata table of the remote node. This is then executed
+    given a new table name, so as to avoid conflicts in nodes that share a partition with the
+    remote.
 
-    :param k_n:
-    :param cur:
-    :param node:
-    :param f_s:
-    :param tnames:
-    :return:
+    :param conn: Cursor to an open database connection.
+    :param node: Node URI of the node to send the request to (the remote node).
+    :param f_s: List of database filenames, in order of the current, then remote node.
+    :param tnames: List of tables involved in the join, in order of current, then remote node.
+    :return: The creation schema of tnames[1] at the remote node, and the name of the new table.
     """
     sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
     host, port, f = ClusterCFG.parse_uri(node)
@@ -207,11 +208,11 @@ def copy_table(conn, node, f_s, tnames):
 
 
 def ship(k_n, r):
-    """
+    """ Ship a table from a remote node to the current one.
 
-    :param k_n:
-    :param r:
-    :return:
+    :param k_n: Socket connection to pass **response** through (not to initiate transfer).
+    :param r: Command list passed through the same socket.
+    :return: None.
     """
     f_s, tnames, node = r[1], r[2], r[3]
     host, port, f = ClusterCFG.parse_uri(node)
@@ -236,11 +237,10 @@ def ship(k_n, r):
 
 def interpret_base(k_n, r):
     """ Given a socket and a message through the socket, interpret the message. The result should
-    be a list of length greater than 1, and the first element should be in the space ['E', 'C',
-    'U', 'P', 'K', 'YS'].
+    be a list.
 
     :param k_n: Socket connection pass response through.
-    :param r: List passed to socket, containing the name of the database file and the SQL.
+    :param r: Command list passed to the socket.
     :return: None.
     """
 
@@ -280,10 +280,10 @@ def interpret_base(k_n, r):
 
 
 def interpret(k_n):
-    """
+    """ Wrapper for the interpret_base function. This is to be used when spawning a new process.
 
-    :param k_n:
-    :return:
+    :param k_n: Current socket connection to a given client.
+    :return: None.
     """
     try:
         # Retrieve the sent data. Unpickle the data. Interpret the command.

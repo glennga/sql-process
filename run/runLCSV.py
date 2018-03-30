@@ -1,17 +1,10 @@
 # coding=utf-8
 """
-Given a CSV of tuples and a configuration file of the partitioning, insert the tuples into the
-cluster. An assumption is made that the CSV is valid, and does not contain any SQL injections (CSV
-must arrive from a reputable source).
+Partitions and loads a CSV of tuples into a table of a cluster of computers. An assumption is made
+that the CSV is valid (normalized to the desired table), and does not contain any SQL injections
+(CSV must arrive from a reputable source).
 
 Usage: python runLCSV.py [clustercfg] [csv]
-
-Error: 2 - Incorrect number of arguments.
-       3 - The 'clustercfg' file is not properly formatted.
-       4 - The number of nodes specified in 'clustercfg' and the catalog node do not match.
-       5 - The node URIs from the catalog node could not be collected.
-       6 - The first node in the cluster could not be reached.
-       7 - There exists a node in the cluster that could not be reached (not just the first).
 """
 
 import csv
@@ -24,11 +17,10 @@ from lib.network import Network
 
 
 def create_socket(n_i):
-    """ Given a node URI, attempt to create a socket.
+    """ Given a node URI, attempt to create a socket. Any errors here are assumed to be fatal.
 
-    TODO: Fix the documentation below.
     :param n_i: Node URI to create socket with.
-    :return: reated. The appropriate socket otherwise.
+    :return An open socket to the desired node.
     """
     host, port, f_n = ClusterCFG.parse_uri(n_i)
     return Network.open_client(host, port, ErrorHandle.fatal_handler), f_n
@@ -42,8 +34,9 @@ def send_insert(k, s_l, p_l, f_n, handler):
     :param s_l: List of prepared SQL strings to execute on the node.
     :param p_l: List of parameters to attach to SQL strings when executing on the node.
     :param f_n: Database filename to record to.
-    :param handler:
-    :return: String containing the error if an error occurred on the node. Otherwise, none.
+    :param handler: Handler to call when reading from the socket fails.
+    :return: String containing the error if an error occured while reading. Otherwise,
+        an operation message with an empty list.
     """
     # Send our command. Only perform for non-empty entries.
     for i, s, p in zip([x for x in range(len(s_l))], s_l, p_l):
@@ -69,7 +62,7 @@ def send_insert_selective(s_l, p_l, sock_f):
     :param s_l: List of prepared SQL strings.
     :param p_l: List of parameters to attach the SQL strings.
     :param sock_f: List of lists of sockets (first element) and database filenames (second element).
-    :return: False if there exists errors on any nodes. True otherwise.
+    :return: None.
     """
     # Perform the insertion for each node in the cluster that has a valid insertion statement.
     for i, sock_f_i in enumerate(sock_f):
@@ -82,10 +75,12 @@ def send_insert_selective(s_l, p_l, sock_f):
 
 
 def read_csv(f_l):
-    """
+    """ Read a CSV into a CSV reader, and return any errors that arise as a result. If there are
+    no errors, return the CSV reader.
 
-    :param f_l:
-    :return:
+    :param f_l: CSV file to read.
+    :return: A string containing the error if the file was not successfully read. Otherwise,
+        the CSV reader.
     """
 
     def _read():

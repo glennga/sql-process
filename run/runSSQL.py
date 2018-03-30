@@ -1,17 +1,8 @@
 # coding=utf-8
 """
-TODO: Fix this documentation, wrong clustercfg
-Executes a **simple** single SQL statement on a cluster of computers. This SQL statement is
-specified in 'sqlfile', and access information about each computer in the cluster is specified
-in 'clustercfg'.
+Execute a single SQL statement that does not involve a join, on a cluster of computers.
 
 Usage: python runSSQL.py [clustercfg] [sqlfile]
-
-Error: 2 - Incorrect number of arguments.
-       3 - There exists an error with the clustercfg file.
-       4 - There exists an error with the SQL file.
-       5 - Catalog could not be reached or the table was not found.
-       6 - Table not found in SQL file.
 """
 
 import sys
@@ -68,8 +59,7 @@ if __name__ == '__main__':
     # Collect the catalog node URI and the SQL file.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),
                                              ErrorHandle.fatal_handler, True)
-    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]),
-                                   ErrorHandle.fatal_handler, True)
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]), ErrorHandle.fatal_handler, True)
 
     # Determine the working table.
     t_table = ErrorHandle.act_upon_error(SQLFile.table(s), ErrorHandle.fatal_handler, True)

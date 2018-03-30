@@ -1,16 +1,8 @@
 # coding=utf-8
 """
-Executes a single DDL statement on a cluster of computers. This DDL statement is specified in
-'ddlfile', and access information about each computer in the cluster is specified in 'clustercfg'.
+Executes a single DDL statement on a cluster of computers.
 
 Usage: python runDDL.py [clustercfg] [ddlfile]
-
-Error: 2 - Incorrect number of arguments.
-       3 - [clustercfg] is not correctly formatted.
-       4 - [ddlfile] is not correctly formatted.
-       5 - Unable to connect to the catalog node.
-       6 - Node entries in the cluster configuration file are improperly formatted.
-       7 - Unable to connect to the catalog node (most likely lost connection here).
 """
 
 import sys
@@ -60,8 +52,7 @@ if __name__ == '__main__':
     # Collect the catalog node URI and the DDL file.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),
                                              ErrorHandle.fatal_handler, True)
-    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]),
-                                   ErrorHandle.fatal_handler, True)
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]), ErrorHandle.fatal_handler, True)
 
     # Test our connection to the catalog. Do not execute if logging cannot occur.
     if not RemoteCatalog.ping(catalog_uri):

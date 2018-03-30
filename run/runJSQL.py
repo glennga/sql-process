@@ -1,17 +1,8 @@
 # coding=utf-8
 """
-TODO: Fix this documentation, wrong clustercfg
-Executes a single SQL statement on a cluster of computers containing a join between two tables.
-This SQL statement is specified in 'sqlfile', and access information about each computer in the
-cluster is specified in 'clustercfg'.
+Execute a single SQL statement involving a join between two tables on a cluster of computers.
 
 Usage: python runJSQL.py [clustercfg] [sqlfile]
-
-Error: 2 - Incorrect number of arguments.
-       3 - There exists an error with the clustercfg file.
-       4 - There exists an error with the SQL file.
-       5 - Catalog could not be reached or the table was not found.
-       6 - Table not found in SQL file.
 """
 
 import re
@@ -29,10 +20,10 @@ successful_joins = []
 
 
 def find_temp_tables(node_uri):
-    """
+    """ Retrieve all of the temporary tables that exist in the given node.
 
-    :param node_uri:
-    :return:
+    :param node_uri: URI of the node to retrieve the temporary tables from.
+    :return: List containing the temporary tables on the current node.
     """
     [host, port, f], tables = ClusterCFG.parse_uri(node_uri), []
 
@@ -62,11 +53,12 @@ def find_temp_tables(node_uri):
 
 
 def remove_temp_table(node_uri, table):
-    """
+    """ Given the URI of a node and a table that exists in that node, remove the given table from
+    the node.
 
-    :param node_uri:
-    :param table:
-    :return:
+    :param node_uri: URI of the node to remove the table from.
+    :param table: Name of the table to remove from the node.
+    :return: None.
     """
     host, port, f = ClusterCFG.parse_uri(node_uri)
 
@@ -83,7 +75,7 @@ def remove_temp_table(node_uri, table):
 
 
 def ship_to_remote(host, port, f, t_tables_n, nu_2_n):
-    """
+    """ Given a
 
     :param host:
     :param port:
@@ -224,8 +216,7 @@ if __name__ == '__main__':
     # Parse both the clustercfg and sqlfile. Ensure that both are properly formatted.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),
                                              ErrorHandle.fatal_handler, True)
-    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]),
-                                   ErrorHandle.fatal_handler, True)
+    s = ErrorHandle.act_upon_error(SQLFile.as_string(sys.argv[2]), ErrorHandle.fatal_handler, True)
 
     # Determine the working tables.
     t_tables = ErrorHandle.act_upon_error(SQLFile.table(s), ErrorHandle.fatal_handler, True)
