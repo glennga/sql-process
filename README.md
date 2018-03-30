@@ -7,15 +7,19 @@ This repository contains code to execute a SQLite statement on every node in a c
 
 The node that initiates these operations is known as the *client* node. This client node can exist as a part of the cluster, or completely separate from the cluster. The nodes that hold the data (in databases) will be referred to as *server* nodes. There exists a special server node that holds information about how to reach each node in the cluster and metadata about the cluster itself (partitions, number of nodes, etc...). This node is known as the *catalog* node.
 
-For client programs that execute a single statement on several machines (i.e. `runDDL.py`, `runSSQL.py`), the following occurs:
+Client operations that involve execution of a single statement across several machines (running a DDL or a SQL statement without joins) are depicted below:
 
-![](images/run-diagram.png)
+![](images/run-simple-diagram.png)
 
-For client programs that load a CSV file onto several machines using a specified partitioned, the following occurs:
+If a client wishes to load a CSV file onto the cluster, the actions below occur:
 
-![](images/load-csv-diagram.png)
+![](images/run-load-diagram.png)
 
-The repository has been tested with the dataset `example/csv`, found in TPC-H benchmark.
+For all operations that involve a join between two (no more, no less) tables across the cluster, the following occur:
+
+![](images/run-join-diagram.png)
+
+The repository has been tested with the TPC-H benchmark, broken into comments and orders tables. These can be found in the `test/data` folder.
 
 ## Getting Started
 1. To get started, all nodes in your cluster should have `python3` and `git`. To access your data outside of Python, install `sqlite3` as well:
@@ -31,9 +35,9 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     ```
     git clone https://github.com/glennga/sql-process.git
     ```
-3. The client node is the node that will perform some operation on the cluster of nodes. Every client node must contain a `clustercfg` file which holds some description of the cluster. *This file will vary depending on which client program you want to call.* More specifications on this format is specified in the **Format of File: clustercfg** section below.
+3. The client node is the node that will perform some operation on the cluster of nodes. Every client node must contain a `clustercfg` file which holds some description of the cluster. *This file will vary depending on your desired client operation.* More specifications on this format is specified in the **Format of File: clustercfg** section below.
 
-    An example `clustercfg` is depicted to create a table across all nodes of a three-node system (`runDDL.py`):
+    An example `clustercfg` is depicted to create a table (DDL execution) across all nodes of a three-node system:
     ```
     catalog.hostname=10.0.0.3:50001/cat.db
 
@@ -43,7 +47,7 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     node2.hostname=10.0.0.3:50003/node3.db
     ```
 
-    Another example is depicted to load a CSV file onto the cluster (`runLCSV.py`) using hash partitioning on a three-node system:
+    Another example is depicted to load a CSV file onto the cluster using hash partitioning on a three-node system:
     ```
     catalog.hostname=10.0.0.3:50001/mycatdb
 
@@ -54,24 +58,24 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     partition.param1=3
     ```
 
-    Another example file for executing SQL on the cluster (`runSSQL.py`) is depicted below:
+    Another example file for executing SQL on the cluster is depicted below:
     ```
     catalog.hostname=10.0.0.3:50001/cat.db
     ```
 4. Create the desired second argument file, which must also be stored on your client node. *This file also varies for each client program.* More specifications can be found in the **Format of File: csv** and **Format of File: sqlfile (or ddlfile)**  sections below.
 
-    An example of a DDL file is depicted below (`runDDL.py`):
+    An example of a DDL file is depicted below:
     ```
     CREATE TABLE BOOKS(isbn char(14), title char(80), price
     decimal);
     ```
 
-    An example of a SQL file is depicted below (`runSSQL.py`):
+    An example of a SQL file is depicted below:
     ```
     SELECT * FROM BOOKS;
     ```
 
-    An example of a CSV file is depicted below (`runLCSV.py`):
+    An example of a CSV file is depicted below:
     ```
     123323232,Database Systems,Ramakrishnan,Raghu
     234323423,Operating Systems,Silberstein,Adam
@@ -82,19 +86,24 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     python3 parDBd.py [hostname] [port]
     ```
 
-6. For an empty cluster, you must use `runDDL.py` to create the desired table to operate on. Specify the `runDDL.py` `clustercfg` file in the first argument, and the `ddlfile` in the second:
+6. For an empty cluster, use `runSQL.py` with the `clustercfg` specified as the first argument, and the `ddlfile` in the second:
     ```
-    python3 runDDL.py [clustercfg] [ddlfile]
+    python3 runSQL.py [clustercfg] [ddlfile]
     ```
 
     If this is successful, you should see some variant of the output below:
     ```
     Successful Execution on Node: 2
-    Successful Execution on Node: 1
     Successful Execution on Node: 3
-    Catalog Node Update Successful.
+    Successful Execution on Node: 1
+
+    Summary:
+    Node 1[10.0.0.3:50001/node1.db]: Successful
+    Node 2[10.0.0.3:50002/node2.db]: Successful
+    Node 3[10.0.0.3:50003/node3.db]: Successful
     ```
 
+TODO: Finish the shit belowasdsadsadsaASDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 7. With a table defined, the next operation that normally follows is the insertion of data. Use `runLCSV.py` to load data onto a partitioned cluster. Specify the `runLCSV.py` `clustercfg` file in the first argument, and the `csv` in the second:
     ```
     python3 loadCSV.py [clustercfg] [csv]
@@ -123,6 +132,8 @@ The repository has been tested with the dataset `example/csv`, found in TPC-H be
     Node 2[10.0.0.3:50002/node2.db]: Successful
     Node 3[10.0.0.3:50003/node3.db]: Successful
     ```
+
+9. With the
 
 ## Usage
 ### Format of File: clustercfg
