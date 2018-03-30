@@ -4,10 +4,9 @@ Test Number: 2
 
 The purpose of this test is create the ORDERS table and test DDL execution. Run the following
 test as such:
-`cd sql-process`
-`python3 runSQL.py test/runDDL/test1-glennga-2.cfg test/runDDL/test1-glennga-2.sql | sort >
-test1-glennga-2.out`
+`cd sql-process/test/runDDL`
+`python3 ../../runSQL.py test1-glennga-2.cfg test1-glennga-2.sql | sort > /tmp/test1-glennga-2.out`
 
 To verify the state of the database, use:
-`test/runDDL/test1-glennga-2.post | sort > test1-glennga-2.post.out`
-`diff test1-glennga-2.post.out test1-glennga-2.post.exp`
+`./test1-glennga-2.post | sort > /tmp/test1-glennga-2.post.out`
+`diff /tmp/test1-glennga-2.post.out test1-glennga-2.post.exp`

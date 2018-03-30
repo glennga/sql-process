@@ -4,10 +4,9 @@ Test Number: 1
 
 The purpose of this test is create the COMMENTS table and test DDL execution. Run the following
 test as such:
-`cd sql-process`
-`python3 runSQL.py test/runDDL/test1-glennga-1.cfg test/runDDL/test1-glennga-1.sql | sort >
-test1-glennga-1.out`
+`cd sql-process/test/runDDL`
+`python3 ../../runSQL.py test1-glennga-1.cfg test1-glennga-1.sql | sort > /tmp/test1-glennga-1.out`
 
 To verify the state of the database, use:
-`test/runDDL/test1-glennga-1.post | sort > test1-glennga-1.post.out`
-`diff test1-glennga-1.post.out test1-glennga-1.post.exp`
+`./test1-glennga-1.post | sort > /tmp/test1-glennga-1.post.out`
+`diff /tmp/test1-glennga-1.post.out test1-glennga-1.post.exp`

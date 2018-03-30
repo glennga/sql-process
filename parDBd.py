@@ -299,8 +299,7 @@ def interpret(k_n):
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        print('Usage: python3 parDBd.py [hostname] [port]')
-        exit(2)
+        ErrorHandle.fatal_handler('python3 parDBd.py [hostname] [port]')
 
     # Create the socket.
     sock = Network.open_server(sys.argv[1], sys.argv[2], ErrorHandle.fatal_handler)
