@@ -11,7 +11,7 @@ OP : 'YS' -> Execute an insertion SQL statement, and wait for additional stateme
    : 'K' -> Record partitioning information to the catalog database.
    : 'U' -> Lookup the node URIs on the catalog database and return these.
    : 'P' -> Lookup the fields for a given table and return this.
-   : 'B' -> Ship a given table to the current node, and perform a join.
+   : 'B' -> Ship a given table to the current node.
 
 Usage: python parDBd.py [hostname] [port]
 
@@ -29,7 +29,7 @@ from lib.network import Network
 from lib.parallel import Parallel
 
 
-def insert_single_on_db(k_n, r):
+def execute_prepared(k_n, r):
     """ Perform a single insertion SQL operation on the passed database. Do not wait for a
     terminating operation code.
 
@@ -51,7 +51,7 @@ def insert_single_on_db(k_n, r):
     Network.write(k_n, ['EY', 'Success'])
 
 
-def insert_on_db(k_n, r):
+def execute_multiple_prepared(k_n, r):
     """ Perform the given insertion SQL operation on the passed database. Wait for the
     terminating 'YZ' and 'YY' operation codes.
 
@@ -155,6 +155,10 @@ def store_from_ship(sock_n, conn, temp_name):
     # Read from our socket.
     operation, resultant = Network.read(sock_n, net_handler)
 
+    # Handle the case where no tuples exist. (Given string = 'No tuples found.').
+    if resultant == 'No tuples found.':
+        return
+
     # Execute the insertion.
     Database.execute(conn.cursor(), 'INSERT INTO ' + temp_name +
                      ' VALUES (' + ''.join(['?, ' for _ in range(len(resultant) - 1)]) + '?);',
@@ -246,10 +250,10 @@ def interpret_base(k_n, r):
 
     if r[0] == 'YS':
         # Execute multiple insertion operations on a database.
-        insert_on_db(k_n, r)
+        execute_multiple_prepared(k_n, r)
     elif r[0] == 'YZ':
         # Execute a single insertion operation on a database.
-        insert_single_on_db(k_n, r)
+        execute_prepared(k_n, r)
     elif r[0] == 'YY':
         # Do not perform any action. Send a success message.
         Network.write(k_n, ['EY', 'Success'])
@@ -269,7 +273,7 @@ def interpret_base(k_n, r):
         # Return the columns associated with the given table.
         return_columns(k_n, r)
     elif r[0] == 'B':
-        # Ship a table from a remote node to here, and perform a join.
+        # Ship a table from a remote node to here.
         ship(k_n, r)
     else:
         Network.write(k_n, ErrorHandle.wrap_error_tag('Operation code invalid.'))

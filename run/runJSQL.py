@@ -28,7 +28,7 @@ from lib.parallel import Parallel
 successful_joins = []
 
 
-def remove_temp_tables(node_uri, _):
+def find_temp_tables(node_uri):
     """
 
     :param node_uri:
@@ -57,23 +57,39 @@ def remove_temp_tables(node_uri, _):
         operation, resultant = ErrorHandle.act_upon_error(a, net_handler, True)
         tables.append(resultant[0])
 
-    # Delete all temporary tables.
-    for table in tables:
-        Network.write(sock, ['E', f, 'DROP TABLE {}'.format(table)])
-        ErrorHandle.act_upon_error(Network.read(sock, net_handler), net_handler)
+    sock.close()
+    return tables
+
+
+def remove_temp_table(node_uri, table):
+    """
+
+    :param node_uri:
+    :param table:
+    :return:
+    """
+    host, port, f = ClusterCFG.parse_uri(node_uri)
+
+    # Create the socket to the first node.
+    sock = Network.open_client(host, port, ErrorHandle.fatal_handler)
+    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.fatal_handler, sock)
+
+    # Delete the table.
+    Network.write(sock, ['E', f, 'DROP TABLE {}'.format(table)])
+    ErrorHandle.act_upon_error(Network.read(sock, net_handler), net_handler)
 
     # Close our socket.
     sock.close()
 
 
-def ship_to_remote(host, port, f, t_tables_n, node_uri_2):
+def ship_to_remote(host, port, f, t_tables_n, nu_2_n):
     """
 
     :param host:
     :param port:
     :param f:
     :param t_tables_n:
-    :param node_uri_2:
+    :param nu_2_n:
     :return:
     """
     # Create the socket to the first node.
@@ -81,7 +97,7 @@ def ship_to_remote(host, port, f, t_tables_n, node_uri_2):
     net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.fatal_handler, sock)
 
     # Inform node 1 to retrieve and store a table from node 2.
-    Network.write(sock, ['B', f, t_tables_n, node_uri_2])
+    Network.write(sock, ['B', f, t_tables_n, nu_2_n])
 
     # Wait for a response that this operation was successful.
     a = Network.read(sock, net_handler)
@@ -92,24 +108,24 @@ def ship_to_remote(host, port, f, t_tables_n, node_uri_2):
     return resultant
 
 
-def execute_join(node_uri_1, node_uri_2, n, s_n, t_tables_n):
+def execute_join(nu_1_n, nu_2_n, n, s_n, t_tables_n):
     """ Given the URI of two nodes from the catalog database and the SQL to execute, join two
     tables across two nodes and store the result in the first table.
 
-    :param node_uri_1: Node URI of the first node to join (and to store the result to).
-    :param node_uri_2: Node URI of the second node to join.
+    :param nu_1_n: Node URI of the first node to join (and to store the result to).
+    :param nu_2_n: Node URI of the second node to join.
     :param n: Join number that this operation is working on.
     :param s_n: Join statement to execute ........... TODO FINISH THIS
     :param t_tables_n: asdsasdasd
     :return:
     """
-    host_1, port_1, f_1 = ClusterCFG.parse_uri(node_uri_1)
-    host_2, port_2, f_2 = ClusterCFG.parse_uri(node_uri_2)
+    host_1, port_1, f_1 = ClusterCFG.parse_uri(nu_1_n)
+    host_2, port_2, f_2 = ClusterCFG.parse_uri(nu_2_n)
     temp_s, handler = s_n, lambda e: ErrorHandle.fatal_handler('[Join ' + n + ']: ' + str(e))
 
     # Inform node 1 to grab a table from node 2 iff node 1 and node 2 are remote.
-    if node_uri_2 != node_uri_1:
-        a = ship_to_remote(host_1, port_1, [f_1, f_2], t_tables_n, node_uri_2)
+    if nu_2_n != nu_1_n:
+        a = ship_to_remote(host_1, port_1, [f_1, f_2], t_tables_n, nu_2_n)
         temp_name = ErrorHandle.act_upon_error(a, ErrorHandle.fatal_handler, True)
 
         # Replace all instances of the second table with the temporary table name.
@@ -129,36 +145,75 @@ def execute_join(node_uri_1, node_uri_2, n, s_n, t_tables_n):
 
     # Handle errors appropriately. Append to our shared memory.
     Network.read(sock_1, net_handler)
-    successful_joins.append([node_uri_1, new_table])
+    successful_joins.append([nu_1_n, new_table])
     sock_1.close()
 
 
-def execute_union(node, n, join_list):
+def execute_union(source_list, join_list):
     """
 
-    :param node:
-    :param n:
+    :param source_list:
     :param join_list:
     :return:
     """
-    host, port, f = ClusterCFG.parse_uri(node)
+    master_node_uri, master_table = source_list
+    slave_node_uri, slave_table = join_list
+    host_1, port_1, f_1 = ClusterCFG.parse_uri(master_node_uri)
+
+    # If necessary, ship the joins to our master.
+    if master_node_uri != slave_node_uri:
+        host_2, port_2, f_2 = ClusterCFG.parse_uri(slave_node_uri)
+
+        # Set our new table name appropriately.
+        a = ship_to_remote(host_1, port_1, [f_1, f_2], [master_table, slave_table], slave_node_uri)
+        slave_table = ErrorHandle.act_upon_error(a, ErrorHandle.fatal_handler, True)
+
+    # Create the socket to the first node.
+    sock = Network.open_client(host_1, port_1, ErrorHandle.fatal_handler)
+    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.fatal_handler, sock)
+
+    # Inform our node to union the table specified in join_list (insert the difference).
+    Network.write(sock, ['E', f_1,
+                         'INSERT INTO {} '.format(master_table) +
+                         'SELECT * '
+                         'FROM {} '.format(slave_table) +
+                         'EXCEPT SELECT * '
+                         'FROM {};'.format(master_table)])
+
+    # Handle our errors.
+    ErrorHandle.act_upon_error(Network.read(sock, net_handler), net_handler)
+    sock.close()
+
+
+def display_join(master_list):
+    """
+    
+    :param master_list:
+    :return: 
+    """
+    node_uri, table = master_list
+    host, port, f = ClusterCFG.parse_uri(node_uri)
 
     # Create the socket to the first node.
     sock = Network.open_client(host, port, ErrorHandle.fatal_handler)
     net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.fatal_handler, sock)
 
-    #
+    # Gather result from join + union.
+    Network.write(sock, ['E', f, 'SELECT * '
+                                 'FROM {}'.format(table)])
 
-    pass
+    # Wait for a response to be sent back, and print the response.
+    a = Network.read(sock, net_handler)
+    operation, resultant = ErrorHandle.act_upon_error(a, net_handler, True)
+    print('[' + ''.join([str(x) + ', ' for x in resultant]) + ']')
 
+    # Repeat. Operation code 'ES' marks the start of a message, and 'EZ' marks the end.
+    while operation != 'EZ':
+        a = Network.read(sock, net_handler)
+        operation, resultant = ErrorHandle.act_upon_error(a, net_handler, True)
+        print('[' + ''.join([str(x) + ', ' for x in resultant]) + ']')
 
-def display_join(node):
-    """
-    
-    :param node: 
-    :return: 
-    """
-    pass
+    sock.close()
 
 
 if __name__ == '__main__':
@@ -187,11 +242,12 @@ if __name__ == '__main__':
     Parallel.execute_nm(nu_2, nu_1, execute_join,
                         lambda y, x, b_2, b_1: (b_1, b_2, x * len(nu_2) + y, s, t_tables))
 
-    # Propagate our changes to a single node (i.e. the first node).
-    Parallel.execute_n(successful_joins, execute_union, lambda x, b: (nu_1[0], x, b))
+    # Propagate our changes to a single node (i.e. the first node). This must be sequential.
+    list(map(lambda s_j: execute_union(successful_joins[0], s_j), successful_joins[1:]))
 
     # Perform the selection, and display the results.
-    display_join(nu_1[0])
+    display_join(successful_joins[0])
 
-    # Remove the temporary tables created.
-    Parallel.execute_n(nu_1, remove_temp_tables, lambda x, b: (b, x))
+    # Remove the temporary tables created. Execute in parallel along nodes.
+    rem = lambda b: list(map(lambda a: remove_temp_table(b, a), find_temp_tables(b)))
+    Parallel.execute_n(nu_1, rem, lambda _, b: (b, ))
