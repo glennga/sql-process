@@ -52,7 +52,7 @@ if __name__ == '__main__':
     elif SQLFile.is_join(s):
         # The user wants to execute SQL involving a join.
         print('Desired Function: Cluster SQL Selection with Join')
-        exit(subprocess.call(['python' + ('3' if (os.name != 'nt') else ''), 'run/runDJSQL.py',
+        exit(subprocess.call(['python' + ('3' if (os.name != 'nt') else ''), 'run/runJSQL.py',
                               sys.argv[1], sys.argv[2]]))
     else:
         # The user wants to execute SQL without joins.

@@ -26,6 +26,7 @@ from lib.database import Database
 from lib.dissect import SQLFile, ClusterCFG
 from lib.error import ErrorHandle
 from lib.network import Network
+from lib.parallel import Parallel
 
 
 def insert_single_on_db(k_n, r):
@@ -229,7 +230,7 @@ def ship(k_n, r):
     Network.write(k_n, ['EB', new_table])
 
 
-def interpret(k_n, r):
+def interpret_base(k_n, r):
     """ Given a socket and a message through the socket, interpret the message. The result should
     be a list of length greater than 1, and the first element should be in the space ['E', 'C',
     'U', 'P', 'K', 'YS'].
@@ -241,8 +242,7 @@ def interpret(k_n, r):
 
     # If our response is not an list, return an error.
     if not hasattr(r, '__iter__'):
-        Network.write(k_n, ErrorHandle.wrap_error_tag('Input not a list.'))
-        return
+        ErrorHandle.raise_handler('Input not a list.')
 
     if r[0] == 'YS':
         # Execute multiple insertion operations on a database.
@@ -274,6 +274,24 @@ def interpret(k_n, r):
     else:
         Network.write(k_n, ErrorHandle.wrap_error_tag('Operation code invalid.'))
 
+
+def interpret(k_n):
+    """
+
+    :param k_n:
+    :return:
+    """
+    try:
+        # Retrieve the sent data. Unpickle the data. Interpret the command.
+        interpret_base(k_n, Network.read(k_n, ErrorHandle.raise_handler))
+    except ConnectionResetError:
+        # Ignore when a connection is forcibly closed, or the socket has timed out.
+        pass
+    except Exception as e:
+        # An exception has been thrown. Inform the client.
+        Network.write(k_n, ErrorHandle.wrap_error_tag(e))
+
+
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
@@ -288,17 +306,9 @@ if __name__ == '__main__':
         sock.listen(1)
         k, addr = sock.accept()
 
-        # Retrieve the sent data. Unpickle the data. Interpret the command.
-        try:
-            interpret(k, Network.read(k, ErrorHandle.raise_handler))
+        # Zombie prevention, check if my children are alive.
+        Parallel.check_children()
 
-        except ConnectionResetError:
-            # Ignore when a connection is forcibly closed, or the socket has timed out.
-            pass
-
-        except Exception as e:
-            # An exception has been thrown. Inform the client.
-            Network.write(k, ErrorHandle.wrap_error_tag(e))
-
-        # Close the current connection.
+        # Hand this off to another process and close the current connection.
+        Parallel.spawn_process(interpret, (k, ))
         k.close()

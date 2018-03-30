@@ -30,7 +30,7 @@ class Database:
         :return:
         """
         suffix = 'JJJJJ' if is_join else 'TTTTT'
-        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + suffix
+        return ''.join(random.choices(string.ascii_uppercase, k=10)) + suffix
 
     @staticmethod
     def description(cur, s, handler=ErrorHandle.default_handler):
