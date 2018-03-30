@@ -1,20 +1,22 @@
 # coding=utf-8
 """
-Contains functions to dissect (parse) various files (clustercfg, sqlfile).
+Contains functions to parse (dissect) the configuration file and some SQL file.
 
-Usage: SQLFile.as_string([SQL file])
-       SQLFile.is_ddl([SQL string])
-       SQLFile.is_drop_ddl([SQL string])
-       SQLFile.is_select([SQL string])
-       SQLFile.is_join([SQL string])
-       SQLFile.table([SQL string])
+Usage: SQLFile.as_string(SQL_file)
+       SQLFile.is_join(SQL_string)
+       SQLFile.is_ddl(SQL_string)
+       SQLFile.is_drop_ddl(SQL_string)
+       SQLFile.is_select(SQL_string)
+       SQLFile.table(SQL_string)
 
-       ClusterCFG.is_runLSCV([cluster configuration file])
-       ClusterCFG.catalog_uri([cluster configuration file])
-       ClusterCFG.node_uris([cluster configuration file])
-       ClusterCFG.load([cluster configuration file])
+       ClusterCFG.is_runLCSV(cluster_configuration_file)
+       ClusterCFG.parse_uri(node_URI)
+       ClusterCFG.catalog_uri(cluster_configuration_file)
+       ClusterCFG.node_uris(cluster_configuration_file)
+       ClusterCFG.load(cluster_configuration_file)
 """
 
+# noinspection PyCompatibility
 from configparser import ConfigParser
 
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
@@ -26,24 +28,29 @@ from lib.parse.SQLiteParser import SQLiteParser
 
 
 class SQLFile:
-    """ All dissecting operations that deal with the SQL file. """
+    """
+    All parsing operations that involve some SQL file. ANTLR is the base of dissecting individual
+    SQL statements.
+    """
 
     @staticmethod
     def _open_file(f):
-        """
+        """ Helper method for opening a file, and returning all of the contents as a string. This
+        is meant to be used with ErrorHandle.attempt_operation.
 
-        :param f:
-        :return:
+        :param f: File to open and dump.
+        :return: All contents of f as a string.
         """
         with open(f) as file_f:
             return file_f.read()
 
     @staticmethod
     def _generate_parse_tree(s):
-        """
+        """ Generate the lexer and parse tree for some SQL statement. Just some ANTLR
+        boilerplate...
 
-        :param s:
-        :return:
+        :param s: SQL statement to generate parse tree for.
+        :return: The parse tree for the given SQL statement.
         """
         lexer = SQLiteLexer(InputStream(s))
         lexer.removeErrorListeners()
@@ -74,10 +81,12 @@ class SQLFile:
 
     @staticmethod
     def is_join(s):
-        """
+        """ Determine if the given SQL statement has a join or not. This is done by walking the
+        parse tree and counting the number of distinct tables. A count > 1 indicates a join is
+        required.
 
-        :param s:
-        :return:
+        :param s: SQL string to walk through.
+        :return: True if more than one unique table exists in 's'. False otherwise.
         """
         return type(SQLFile.table(s)) is list
 
@@ -159,24 +168,29 @@ class SQLFile:
 
 
 class ClusterCFG:
-    """ All dissecting operations that deal with the clustercfg file. """
+    """
+    All parsing operations involved with the cluster configuration file. The standard followed here
+    is that of a normal *.ini file, so ConfigParser is our base.
+    """
 
     @staticmethod
     def _open_with_dummy(f):
-        """
+        """ Helper method for opening a configuration file whose contents do not belong to any
+        section. This is a requirement for ConfigParser, so we get around this by appending a
+        dummy section 'D'. This is also meant to be used with ErrorHandle.attempt_operation.
 
-        :param f:
-        :return:
+        :param f: Config file to load as a string.
+        :return: The config as a string, with section D prepended.
         """
         with open(f) as file_f:
             return '[D]\n' + file_f.read()
 
     @staticmethod
     def _construct_config_reader(f):
-        """
+        """ Helper method used to parse the given file into a ConfigParser object.
 
-        :param f:
-        :return:
+        :param f: Config file to load.
+        :return: The given config file, as a ConfigParser object.
         """
         config = ConfigParser()
 
@@ -192,7 +206,6 @@ class ClusterCFG:
         config.read_string(config_string)
         return config
 
-    # TODO: Finish the function below.
     @staticmethod
     def is_runLSCV(f):
         """ Given the cluster configuration file, determine if the desired function is to load a
@@ -210,10 +223,10 @@ class ClusterCFG:
 
     @staticmethod
     def parse_uri(node):
-        """
+        """ Given a URI, parse the host, port and filename.
 
-        :param node:
-        :return:
+        :param node: Node URI to dissect
+        :return: Host, port, and filename of the node.
         """
         host = node.split(':', 1)[0]
         port, f = node.split(':', 1)[1].split('/', 1)
@@ -273,10 +286,10 @@ class ClusterCFG:
         """ Helper method for the 'load' function. Returns all of the partitioning information
         from a configuration file reader.
 
-        :param p_m: Partitioning method to parse for. Exists in space ['range', 'notparition',
+        :param p_m: Partitioning method to parse for. Exists in space ['range', 'notpartition',
             'hash'].
         :param r_d: Current partitioning information as a dictionary.
-        :param config: Open onfiguration file reader.
+        :param config: Open configuration file reader.
         :return: String containing the error if the partitioning information is not correctly
             formatted. Otherwise, the partitioning dictionary with the additional partitioning
             information.

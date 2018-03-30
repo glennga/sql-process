@@ -15,7 +15,10 @@ from lib.parse.SQLiteParser import SQLiteParser
 
 
 class TableNameStore(SQLiteListener):
-    """ Listener class to record table name(s). """
+    """
+    Listener class to record table name(s). This is to be used in ANTLR parse tree walking,
+    and the 'parse' library.
+    """
 
     # Current name(s) associated with the table.
     table_names = []
@@ -30,7 +33,10 @@ class TableNameStore(SQLiteListener):
 
 
 class StatementType(SQLiteListener):
-    """ Listener class to record the type of statement found. """
+    """
+    Listener class to record the type of statement found. This is to be used in ANTLR parse tree
+    walking, and the 'parse' library.
+    """
 
     # Flag to indicate if a 'SELECT FROM' statement has been found.
     is_select = False

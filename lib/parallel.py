@@ -1,19 +1,34 @@
-from threading import Thread
+# coding=utf-8
+"""
+Contains functions to run tasks in parallel, be it through threads or processes.
+
+Usage: Parallel.execute_n(iterable, operation, argument_constructor)
+       Parallel.execute_nm(outer_iterable, inner_iterable, operation, argument_constructor)
+
+       Parallel.spawn_process(operation, argument_list)
+       Parallel.check_children()
+"""
+
 from multiprocessing import Process, active_children
+from threading import Thread
+
 
 class Parallel:
     """
-
+    All functions meant to handle parallel execution of some operation. Processes are used by the
+    parDBd daemon to keep it's listening port open, and threads are used for all other parallel
+    tasks.
     """
 
     @staticmethod
     def execute_n(n, operation, argument_constructor):
-        """
+        """ Execute some operation on every element in some list. The specifics on how the
+        arguments are presented to the operation are detailed in 'argument_constructor'.
 
-        :param n:
-        :param operation:
-        :param argument_constructor:
-        :return:
+        :param n: Iterable to pass elements to the given operation.
+        :param operation: Operation to execute in parallel.
+        :param argument_constructor: Creates the argument tuple given elements from n.
+        :return: None.
         """
         threads = []
 
@@ -27,13 +42,15 @@ class Parallel:
 
     @staticmethod
     def execute_nm(n, m, operation, argument_constructor):
-        """
+        """ Execute some operation on every element in two lists. List M specifies items that can
+        be run in parallel for some element in list N. The specifics on how the arguments are
+        presented to the operation are detailed in 'argument_constructor'.
 
-        :param n:
-        :param m:
-        :param operation:
-        :param argument_constructor:
-        :return:
+        :param n: Outer iterable to pass elements to the given operation. This is **serial**.
+        :param m: Inner iterable to pass elements to the given operation. This is **parallel**.
+        :param operation: Operation to execute in parallel.
+        :param argument_constructor: Creates the argument tuple given elements from n and m.
+        :return: None.
         """
         threads = []
 
@@ -48,19 +65,21 @@ class Parallel:
 
     @staticmethod
     def spawn_process(operation, arguments):
-        """
+        """ Execute some operation given an argument tuple as another process (not a thread).
+        This allows for true multithreading, as Python's thread library only spawns user threads.
 
-        :param operation:
-        :param arguments:
-        :return:
+        :param operation: Operation to execute in parallel.
+        :param arguments: Arguments tuple to pass to the current operation.
+        :return: None.
         """
         p = Process(target=operation, args=arguments)
         p.start()
 
     @staticmethod
     def check_children():
-        """
+        """ List of active processes spawned from the current process. This implicitly calls the
+        join method, and is used in zombie prevention.
 
-        :return:
+        :return: List of active processes spawned from the current process.
         """
         return active_children()

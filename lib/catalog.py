@@ -3,15 +3,15 @@
 Contains functions to manage the catalog table, locally (client side requests) and remotely (server
 side actions).
 
-Usage: LocalCatalog.create_dtable([catalog database filename])
-       LocalCatalog.record_ddl([socket], [command list])
-       LocalCatalog.record_partition([socket], [command list])
-       LocalCatalog.return_node_uris([socket], [command list])
+Usage: LocalCatalog.create_dtable(catalog_database_filename)
+       LocalCatalog.record_ddl(socket, command_list)
+       LocalCatalog.record_partition(socket, command_list)
+       LocalCatalog.return_node_uris(socket, command_list)
 
-       RemoteCatalog.ping([catalog node URI])
-       RemoteCatalog.record_ddl([catalog node URI], [successful node URIs], [executed DDL])
-       RemoteCatalog.return_node_uris([catalog node URI], [table name])
-       RemoteCatalog.update_partition([catalog node URI], [partition dictionary], [number of nodes])
+       RemoteCatalog.ping(node_URI)
+       RemoteCatalog.record_ddl(catalog_node_URI, node_list, executed_DDL)
+       RemoteCatalog.return_node_uris(catalog_node_URI, table_name)
+       RemoteCatalog.update_partition(catalog_node_URI, partition_dictionary, number_of_nodes)
 """
 
 import sqlite3 as sql
@@ -23,9 +23,11 @@ from lib.network import Network
 
 
 class LocalCatalog:
-    """ All catalog operations for the catalog node itself (operating locally). Errors here are
-    handled by raising an exception. parDBd is meant to catch these errors and send these over to
-    the client. """
+    """
+    All catalog operations for the catalog node itself (operating locally). Errors here are handled
+    by raising an exception. parDBd is meant to catch these errors and send these over to
+    the client.
+    """
 
     @staticmethod
     def create_dtable(f):
@@ -39,10 +41,10 @@ class LocalCatalog:
         conn, cur = Database.connect(f, ErrorHandle.raise_handler)
         Database.execute(cur, 'CREATE TABLE IF NOT EXISTS dtables ('
                               'tname CHARACTER(32), '
-                              'nodedriver CHARACTER(64), '
+                              'nodedriver CHARACTER(64), '  # Unused here.
                               'nodeurl CHARACTER(128), '
-                              'nodeuser  CHARACTER(16), '
-                              'nodepasswd  CHARACTER(16), '
+                              'nodeuser  CHARACTER(16), '  # Unused here.
+                              'nodepasswd  CHARACTER(16), '  # Unused here.
                               'partmtd INT, '
                               'nodeid INT, '
                               'partcol CHARACTER(32), '
@@ -51,10 +53,13 @@ class LocalCatalog:
 
     @staticmethod
     def _perform_ddl(cur, ddl, table, node_uris):
-        """
+        """ Helper method to execute the a given DDL.
 
-        :param cur:
-        :return:
+        :param cur: Cursor to the catalog database.
+        :param ddl: The executed DDL across the entire cluster.
+        :param table: Name of the table associated with the given DDL.
+        :param node_uris: URIs of all nodes the DDL was executed on.
+        :return: None.
         """
 
         # Perform the DROP DDL.
@@ -75,20 +80,18 @@ class LocalCatalog:
         tuples = [(table, node_uris[i], i + 1) for i in range(len(node_uris))]
         Database.executemany(cur, 'INSERT INTO dtables '
                                   'VALUES (?, NULL, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL)',
-                             ErrorHandle.raise_handler, tuples)
-
+                             tuples, ErrorHandle.raise_handler)
 
     @staticmethod
     def record_ddl(k, r):
-        """ Given node URIs of the cluster and the DDL statement to execute, insert metadata
+        """ Given node URIs of the cluster and the DDL statement that was executed, insert metadata
         about which nodes and which tables are affected.
 
         :param k: Socket connection to send response through.
-        :param r: List passed to socket, containing the filename associated with the catalog node
-            database the cluster node URIs, and the SQL being executed.
+        :param r: Command list passed through the same socket.
         :return: None.
         """
-        f, node_uris, ddl = r[1:4]
+        f, node_uris, ddl = r[1], r[2], r[3]
 
         # Connect to SQLite database using the filename.
         conn, cur = Database.connect(f, ErrorHandle.raise_handler)
@@ -108,11 +111,11 @@ class LocalCatalog:
 
     @staticmethod
     def _record_specific_partition(r_d, numnodes, cur):
-        """
+        """ Helper method for updating the catalog node with partition information.
 
-        :param r_d:
-        :param numnodes:
-        :param cur:
+        :param r_d: Dictionary associated with all partition operations.
+        :param numnodes: Number of nodes an operation was partitioned across.
+        :param cur: Cursor to the catalog database.
         :return:
         """
         # No partitioning has been specified. Create the appropriate entries.
@@ -170,9 +173,8 @@ class LocalCatalog:
 
     @staticmethod
     def return_node_uris(k, r):
-        """ Return a list of node URIs stored in the 'dtables' table, which informs the client
-        machine (not this node) how to contact the cluster. Using the catalog database filename
-        and the name of table associated with the cluster.
+        """ Return a list of node URIs stored in the 'dtables' table, which gives the client
+        machine access to the cluster.
 
         :param k: Socket to send node URI list to.
         :param r: Command list passed through the same socket.
@@ -198,15 +200,16 @@ class LocalCatalog:
 
 
 class RemoteCatalog:
-    """ All catalog operations on general nodes (i.e. calls the catalog node). These are
-    non-fatal, and a string or boolean error is returned instead. """
+    """
+    All catalog operations on general nodes (i.e. calls the catalog node). These are non-fatal, and
+    a string or boolean error is returned instead.
+    """
 
     @staticmethod
     def ping(c):
-        """ Given information about the catalog node, check if a connection is possible to the
-        catalog node.
+        """ Attempt to connect and send a message to a node, given it's URI.
 
-        :param c: The value of the key-value pair inside clustercfg.
+        :param c: Node URI of the desired node to reach.
         :return: True if a connection can be achieved. False otherwise.
         """
         host, port, f = ClusterCFG.parse_uri(c)
@@ -225,21 +228,19 @@ class RemoteCatalog:
         return True
 
     @staticmethod
-    def record_ddl(c, success_nodes, ddl):
-        """ Given information about the cluster and the DDL statement to execute, store the DDL
-        in the catalog node.
+    def record_ddl(c, nodes, ddl):
+        """ Store a DDL that was executed in the catalog node.
 
-        TODO: Fix the documentation below.
-        :param c: The URI associated with the catalog.
-        :param success_nodes: List containing the URIs of the successfully executed nodes.
-        :param ddl: DDL statement to pass to the catalog node.
+        :param c: Node URI of the catalog node to store to.
+        :param nodes: List of nodes the DDL was executed across.
+        :param ddl: The DDL that was executed.
         :return The resulting error if the appropriate response is not returned successfully. True
             otherwise.
         """
         host, port, f = ClusterCFG.parse_uri(c)
 
         # Only proceed if there exists at least one successful node.
-        if len(success_nodes) == 0:
+        if len(nodes) == 0:
             return ErrorHandle.wrap_error_tag('No nodes were successful.')
 
         # Create our socket.
@@ -249,7 +250,7 @@ class RemoteCatalog:
             return ErrorHandle.wrap_error_tag('Socket could not be established.')
 
         # Otherwise, record the DDl.
-        Network.write(sock, ['C', f, success_nodes, ddl])
+        Network.write(sock, ['C', f, nodes, ddl])
 
         # Wait for a response to be sent back, and return the appropriate message.
         net_handler = lambda e: Network.close_wrapper(e, ErrorHandle.default_handler, sock)
@@ -261,8 +262,8 @@ class RemoteCatalog:
     def return_node_uris(c, tname):
         """ Given the catalog URI and the name of table, grab the node URIs from the catalog node.
 
-        :param c: The URI associated with the catalog.
-        :param tname: Name of the table associated with the cluster to search.
+        :param c: Node URI of the catalog node to read from.
+        :param tname: Name of the table in the cluster to search for.
         :return: The resulting error if the appropriate response is not returned successfully.
             Otherwise, a list of node URIs.
         """
@@ -289,14 +290,14 @@ class RemoteCatalog:
 
     @staticmethod
     def update_partition(c, r_d, numnodes):
-        """ Given information about the catalog and partitioning information, store the partition
-        in the catalog node.
+        """ Update the partition information in the catalog node, after performing the runLCSV
+        operaton.
 
-        :param c: The URI associated with the catalog.
-        :param r_d: Dictionary containing partitioning entries.
-        :param numnodes: Number of nodes associated with the cluster.
+        :param c: Node URI of the catalog node to read from.
+        :param r_d: Partition dictionary used to execute runLCSV.
+        :param numnodes: Number of nodes an operation was partitioned across.
         :return: The resulting error if the appropriate response is not returned successfully.
-            Otherwise, true.
+            Otherwise, a success message.
         """
         host, port, f = ClusterCFG.parse_uri(c)
 
