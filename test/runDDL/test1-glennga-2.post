@@ -1,0 +1,10 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Query our database for the metadata from each node.
+sqlite3 $BASEDIR/../data/node1.db 'SELECT sql FROM sqlite_master WHERE name="ORDERS";'
+sqlite3 $BASEDIR/../data/node2.db 'SELECT sql FROM sqlite_master WHERE name="ORDERS";'
+sqlite3 $BASEDIR/../data/node3.db 'SELECT sql FROM sqlite_master WHERE name="ORDERS";'
+
+# Also query the catalog node for all 'dtables' entries.
+sqlite3 $BASEDIR/../data/catalog.db 'SELECT * FROM dtables WHERE tname="ORDERS";'

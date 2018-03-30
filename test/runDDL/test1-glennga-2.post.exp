@@ -1,0 +1,4 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# TODO: Create the expected output file.
