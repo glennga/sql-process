@@ -379,6 +379,9 @@ Message | Fix
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
 `Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
+`'numnodes' is not defined.` | The given `clustercfg` is not formatted correctly. The 'numnodes' entry was not found.
+`Node entries not formatted correctly.` | The given `clustercfg` is not formatted correctly. Double check the **Format of File: clustercfg**.
+
 
 ### runLCSV.py Errors
 Message | Fix

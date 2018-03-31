@@ -2,8 +2,8 @@ Function Number: 3
 Username: glennga
 Test Number: 2
 
-The purpose of this test is verify the output of some simple query against the ORDERS table.
-To run the test:
+The purpose of this test is create the COMMENTS table and test DDL execution. This is meant to be
+**after** the runLCSV - 2 test. To run the test:
 
 Make each script executable.
 `chmod +x test/runSSQL/test3-glennga.pre test/runSSQL/test3-glennga.post`
