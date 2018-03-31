@@ -357,11 +357,130 @@ Desired Operation | Operation Code | Client Sends... | Server Returns...
 **Client** is requesting the columns of a specific table from some node in the cluster (it is assumed that all nodes have the same tables). **Server** wants to deliver these columns to the client. | `P` | `['P', database-file-name, table-name]` | `['EP', list-of-columns-in-table]`
 **Client** is requesting that the server retrieve a table from a remote node, and store it in it's database. **Server** wants to inform the client of the table name that server stored the remote table as. | `B` | `['B', database-filename-list, name-of-tables-list, remote-node-uris]` | `['EB', name-of-new-table]`
 
+## Testing
+All testing has been performed with the TPC-H benchmark. There exists at least one test for each function of `runSQL.py`. Instructions on how to run each test are given below, and in the `*.txt` of each directory. *The table names `ORDERS` and `COMMENTS` are used here, do not run the tests if these are being used by you.*
+
+The tests are meant to be run in order of:
+1. runDDL
+2. runLCSV
+3. runSSQL
+4. runJSQL
+
+### runDDL.py Testing
+1. Begin by making all `.pre` and `.post` files executable.
+```
+chmod +x test/runDDL/test1-glennga-*.pre test/runDDL/test1-glennga-*.post
+```
+
+2. Start the daemons, and delete any tables named `COMMENTS`.
+```
+./test/runDDL/test1-glennga-1.pre
+```
+
+3. Execute the test. Direct the output to some file.
+```
+python3 runSQL.py test/runDDL/test1-glennga-1.cfg test/runDDL/test1-glennga-1.sql | sort > /tmp/test1-glennga-1.out
+```
+
+4. To verify the state of the database, check for any differences between the POST and the expected.
+```
+./test/runDDL/test1-glennga-1.post | sort > /tmp/test1-glennga-1.post.exp
+diff /tmp/test1-glennga-1.post.exp test/runDDL/test1-glennga-1.post.exp
+```
+
+5. Repeat steps 2 to 4 for test 2.
+
+### runLCSV.py Testing
+0. Ensure that the `runDDL` tests have ran.
+
+1. Begin by making all `.pre` and `.post` files executable.
+```
+chmod +x test/runLCSV/test2-glennga-*.pre test/runLCSV/test2-glennga-*.post
+```
+
+2. Start the daemons, and delete any contents inside the `COMMENTS` table.
+```
+./test/runLCSV/test2-glennga-1.pre
+```
+
+3. Execute the test. Direct the output to some file.
+```
+python3 runSQL.py test/runLCSV/test2-glennga-1.cfg test/runLCSV/test2-glennga-1.sql | sort > /tmp/test2-glennga-1.out
+```
+
+4. To verify the state of the database, check for any differences between the POST and the expected.
+```
+./test/runLCSV/test2-glennga-1.post | sort > /tmp/test2-glennga-1.post.exp
+diff /tmp/test2-glennga-1.post.exp test/runLCSV/test2-glennga-1.post.exp
+```
+
+5. Repeat steps 2 to 4 for test 2.
+
+### runSSQL.py Testing
+0. Ensure that the `runLCSV` and `runDDL` tests have ran.
+
+1. Begin by making all `.pre` and `.post` files executable.
+```
+chmod +x test/runSSQL/test3-glennga.pre test/runSSQL/test3-glennga.post
+```
+
+2. Start the daemons.
+```
+./test/runSSQL/test3-glennga-1.pre
+```
+
+3. Execute the test. Direct the output to some file.
+```
+python3 runSQL.py test/runSSQL/test3-glennga.cfg test/runSSQL/test3-glennga-1.sql | sort > /tmp/test3-glennga-1.out
+```
+
+4. Kill the daemons.
+```
+./test/runSSQL/test3-glennga.post
+```
+
+5. Verify the output of this execution.
+```
+diff /tmp/test3-glennga-1.out test/runSSQL/test3-glennga-1.exp
+```
+
+6. Repeat steps 2 to 5 for test 2.
+
+### runSSQL.py Testing
+0. Ensure that the `runLCSV` and `runDDL` tests have ran.
+
+1. Begin by making all `.pre` and `.post` files executable.
+```
+chmod +x test/runJSQL/test4-glennga-*.pre test/runJSQL/test4-glennga-*.post
+```
+
+2. Start the daemons.
+```
+./test/runJSQL/test4-glennga-1.pre
+```
+
+3. Execute the test. Direct the output to some file.
+```
+python3 runSQL.py test/runJSQL/test4-glennga.cfg test/runJSQL/test4-glennga-1.sql | sort > /tmp/test4-glennga-1.out
+```
+
+4. Kill the daemons.
+```
+./test/runJSQL/test4-glennga.post
+```
+
+5. Verify the output of this execution.
+```
+diff /tmp/test4-glennga-1.out test/runJSQL/test4-glennga-1.exp
+```
+
+
 ## Troubleshooting
 All successful operations are returned with a code of 0. All errors are returned with a code of -1 and the errors are prefixed with the string `Error: `. Below are a list of common errors and their appropriate fixes.
 
 ### runSQL.py Errors
 *Any other errors found with `runSQL.py` are a result of running the programs below. *
+
 Message | Fix
 --- | ---
  `Usage: python3 runSQL.py [clustercfg] [sqlfile/csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
@@ -386,6 +505,9 @@ Message | Fix
 --- | ---
  `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+`'XXXXX' is not properly formatted or does not exist.` | The given `clustercfg` is not formatted correctly. Double check the **Format of File: clustercfg** for the `runLCSV` section.
+`[Errno 111] Connection refused` | All nodes in the cluster could not be reached.
+
 
 ### runSSQL.py Errors
 Message | Fix
@@ -395,6 +517,7 @@ Message | Fix
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
 `Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
+ `Table XXXX not found.` | The table specified in the `sqlfile` was not found on the catalog. Execute a 'CREATE TABLE' statement instead with the `clustercfg` configuration specifications, or fix the table name.
 
 ### runJSQL.py Errors
 Message | Fix
@@ -404,6 +527,8 @@ Message | Fix
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
 `Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
+ `Table XXXX not found.` | The table specified in the `sqlfile` was not found on the catalog. Execute a 'CREATE TABLE' statement instead with the `clustercfg` configuration specifications, or fix the table name.
+
 
 ### parDBd.py Errors
 Message | Fix
@@ -412,42 +537,3 @@ Message | Fix
 `Could not interpret the given port argument.` | The port number could not be parsed. Ensure that the hostname is specified first, followed by the port.
 `[Errno 99] Cannot assign requested address` | A socket cannot be created with the given hostname. Double check the hostname passed.
 `Socket Error: [Errno 98] Address is already in use.` | The specified port is already in use. Use another port.
-
-
-
-
-
-
-### runDDL.py Errors
-Error Code | Message | Fix
---- | --- | ---
-2 | `Usage: python3 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-3 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `clustercfg` file cannot be found. Double check the path.
-4 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `ddlfile` file cannot be found. Double check the path.
-4 | `Error: No terminating semicolon.` | The supplied `ddlfile` does not have a terminating semi-colon to mark the end of the statement.
-5 | `Error: Cannot connect to the catalog. No statement executed.` | The catalog node could not be reached. Check your internet connection, the `catalog.hostname` entry in the `clustercfg` file, and make sure that the daemon is running on the catalog node.
-6 | `Error: Node entries not formatted correctly.` | The node entries in the `clustercfg` file are not formatted correctly. Check the format in the `runDDL` section.
-7 | `Catalog Error: Socket could not be established.` | Double check your internet connection. Somewhere between the executing and logging process, a connection to the catalog node was no longer able to be established.
-
-### runSQL.py Errors
-Error Code | Message | Fix
---- | --- | ---
-2 | `Usage: python3 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-3 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `clustercfg` file cannot be found. Double check the path.
-4 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `sqlfile` file cannot be found. Double check the path.
-4 | `Error: No terminating semicolon.` | The supplied `sqlfile` does not have a terminating semi-colon to mark the end of the statement.
-5 | `Catalog Error: Socket could not be established.` | The catalog could not be reached. Check your internet connection, the `catalog.hostname` entry in the `clustercfg` file, and make sure that the daemon is running on the catalog node.
-5 | `Catalog Error: Table ... not found.` | The table specified in the `sqlfile` was not found on the catalog. Execute a 'CREATE TABLE' statement instead with the `clustercfg` configuration specifications, or fix the table name.
-6 | `Error: Table could not be found in 'sqlfile'.` | A table name could not be parsed from the given `sqlfile`. Double check your SQLite syntax here.
-
-
-### loadCSV.py Errors
-Error Code | Message | Fix
---- | --- | ---
-2 | `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-3 |`Error: Not found: '...'` | There exists a key error in the `clustercfg` file. Double check the `clustercfg` configuration specifications.
-4 | `Incorrect number of nodes specified in 'clustercfg'.` | If hash partitioning is specified, then the number of nodes in the cluster do not match the `partition.param1` in `clustercfg`. If range partitioning is specified, then the number of nodes in the cluster do match the `numnodes` in `clustercfg`. Use `runDDL.py` to change the table schema, or correct your `clustercfg` file.
-5 | `Catalog Error: Socket could not be established.` | The catalog could not be reached. Check your internet connection, the `catalog.hostname` entry in the `clustercfg` file, and make sure that the daemon is running on the catalog node.
-6 | `Could not connect to first node in the cluster.` | The first node in the cluster could not be reached. Ensure that the daemon is running on all  nodes in the cluster.
-7 | `All nodes in cluster could not be reached.` | There exists a node in the cluter that could not be reached. Ensure that the daemon is running on all nodes in the cluster.
-
