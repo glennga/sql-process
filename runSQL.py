@@ -21,7 +21,7 @@ from lib.error import ErrorHandle
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('python3.6 runSQL.py [clustercfg] [sqlfile/csvfile]')
+        ErrorHandle.fatal_handler('python3 runSQL.py [clustercfg] [sqlfile/csvfile]')
     project_path = os.path.dirname(os.path.abspath(__file__))
 
     # Determine if the user wants to load a CSV file.

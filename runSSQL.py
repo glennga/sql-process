@@ -60,7 +60,7 @@ def execute_sql(node_uri, n, s_n):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('Usage: python3.6 runSSQL.py [clustercfg] [ddlfile]')
+        ErrorHandle.fatal_handler('Usage: python3 runSSQL.py [clustercfg] [ddlfile]')
 
     # Collect the catalog node URI and the SQL file.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),

@@ -2,9 +2,9 @@
 BASEDIR=$(dirname "$0")
 
 # Start the daemons for all nodes.
-python3.6 $BASEDIR/../../parDBd.py 192.168.0.13 50001 &
-python3.6 $BASEDIR/../../parDBd.py 192.168.0.13 50002 &
-python3.6 $BASEDIR/../../parDBd.py 192.168.0.13 50003 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50001 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50002 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50003 &
 
 # Delete any data that may exist in the ORDERS table.
 sqlite3 $BASEDIR/../data/node1.db 'BEGIN TRANSACTION; DELETE FROM ORDERS; COMMIT;'

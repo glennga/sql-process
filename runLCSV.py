@@ -241,7 +241,7 @@ def rangepart_load(n, c, r_dl, f_l):
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('Usage: python3.6 runLCSV.py [clustercfg] [csv]')
+        ErrorHandle.fatal_handler('Usage: python3 runLCSV.py [clustercfg] [csv]')
 
     # Dissect the given clustercfg for partitioning and catalog information.
     catalog_uri, r_d, numnodes = ErrorHandle.act_upon_error(ClusterCFG.load(sys.argv[1]),
