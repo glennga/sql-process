@@ -29,13 +29,12 @@ def create_socket(n_i):
 def send_insert(k, s_l, p_l, f_n, handler):
     """ Construct the appropriate command list and send this over the given socket.
 
-    TODO: Fix the documentation below.
     :param k: Socket to send command list through.
     :param s_l: List of prepared SQL strings to execute on the node.
     :param p_l: List of parameters to attach to SQL strings when executing on the node.
     :param f_n: Database filename to record to.
     :param handler: Handler to call when reading from the socket fails.
-    :return: String containing the error if an error occured while reading. Otherwise,
+    :return: String containing the error if an error occurred while reading. Otherwise,
         an operation message with an empty list.
     """
     # Send our command. Only perform for non-empty entries.
@@ -66,7 +65,8 @@ def send_insert_selective(s_l, p_l, sock_f):
     """
     # Perform the insertion for each node in the cluster that has a valid insertion statement.
     for i, sock_f_i in enumerate(sock_f):
-        handler = lambda e: list(map(lambda x: x.close(), list(zip(*sock_f))[0])) and \
+        handler = lambda e: list(map(lambda x: Network.write(x, ['YX']), list(zip(*sock_f))[0])) \
+                            and list(map(lambda x: x.close(), list(zip(*sock_f))[0])) and \
                             ErrorHandle.fatal_handler('[Node ' + str(i) + ']: ' + str(e))
 
         # If at any point we encounter an error, we stop.
@@ -120,12 +120,13 @@ def nopart_load(n, c, r_dl, f_l):
     # For each node in the node URIs, construct a socket.
     sock_f = list(map(lambda x: create_socket(x), n))
     close_sockets = lambda s_f: list(map(lambda x: x.close(), list(zip(*s_f))[0]))
+    dont_commit = lambda s_f: list(map(lambda x: Network.write(x, ['YX']), list(zip(*s_f))[0]))
 
     # Perform the insertion for each node in the cluster. List must be flattened beforehand.
     for i, sock_f_i in enumerate(sock_f):
         handler_i = lambda e: ErrorHandle.fatal_handler('[Node ' + str(i) + ']: ' + str(e))
         send_insert(sock_f_i[0], s_l, p_l, sock_f_i[1],
-                    lambda e: handler_i(e) and close_sockets(sock_f))
+                    lambda e: handler_i(e) and dont_commit(sock_f) and close_sockets(sock_f))
 
     # Close all sockets.
     close_sockets(sock_f)
@@ -240,7 +241,7 @@ def rangepart_load(n, c, r_dl, f_l):
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('python3 runLCSV.py [clustercfg] [csv]')
+        ErrorHandle.fatal_handler('Usage: python3 runLCSV.py [clustercfg] [csv]')
 
     # Dissect the given clustercfg for partitioning and catalog information.
     catalog_uri, r_d, numnodes = ErrorHandle.act_upon_error(ClusterCFG.load(sys.argv[1]),

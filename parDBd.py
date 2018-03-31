@@ -6,6 +6,7 @@ through that same port. Given an operation code OP, the following occurs:
 OP : 'YS' -> Execute an insertion SQL statement, and wait for additional statements.
    : 'YZ' -> Execute a SQL statement, and don't wait for additional statements.
    : 'YY' -> Don't execute a SQL statement, and don't wait for additional statements.
+   : 'YX' -> Rollback to the last stable state.
    : 'E' -> Execute a SQL statement and return tuples if applicable.
    : 'C' -> Record a DDL to the catalog database.
    : 'K' -> Record partitioning information to the catalog database.
@@ -56,7 +57,7 @@ def execute_multiple_prepared(k_n, r):
     :param r: Command list passed through the same socket.
     :return: None.
     """
-    f, s, tup, r_i = r[1], r[2], r[3], r
+    f, s, tup, r_i, is_commit = r[1], r[2], r[3], r, True
     net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, k_n)
 
     # Create our connection.
@@ -71,17 +72,20 @@ def execute_multiple_prepared(k_n, r):
         # Interpret the current operation code.
         result = Network.read(k_n, net_handler)
 
-        # Stop if YZ pr YY, proceed otherwise.
+        # Stop if YZ, YY, or YX proceed otherwise.
         if result[0] == 'YY':
             break
         elif result[0] == 'YZ':
             ErrorHandle.act_upon_error(Database.execute(cur, s, sql_handler, tup), net_handler)
             break
+        elif result[0] == 'YX':
+            is_commit = False
+            break
         else:
             f, s, tup = result[1], result[2], result[3]
 
-    # Commit our changes and close our connection.
-    conn.commit(), conn.close()
+    # Commit our changes (if desired) and close our connection.
+    conn.commit() if is_commit else None, conn.close()
     Network.write(k_n, ['EY', 'Success'])
 
 
@@ -149,7 +153,8 @@ def store_from_ship(sock_n, conn, temp_name):
     :return: None.
     """
     sql_handler = lambda e_n: Database.rollback_wrapper(e_n, ErrorHandle.raise_handler, conn)
-    net_handler = lambda e_n: Network.close_wrapper(e_n, ErrorHandle.raise_handler, sock_n)
+    net_handler = lambda e_n: Network.write(sock_n, ['YX']) and \
+                              Network.close_wrapper(e_n, ErrorHandle.raise_handler, sock_n)
 
     # Read from our socket.
     operation, resultant = Network.read(sock_n, net_handler)
@@ -299,7 +304,7 @@ def interpret(k_n):
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('python3 parDBd.py [hostname] [port]')
+        ErrorHandle.fatal_handler('Usage: python3 parDBd.py [hostname] [port]')
 
     # Create the socket.
     sock = Network.open_server(sys.argv[1], sys.argv[2], ErrorHandle.fatal_handler)
@@ -313,5 +318,5 @@ if __name__ == '__main__':
         Parallel.check_children()
 
         # Hand this off to another process and close the current connection.
-        Parallel.spawn_process(interpret, (k, ))
+        Parallel.spawn_process(interpret, (k,))
         k.close()

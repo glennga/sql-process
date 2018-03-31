@@ -26,16 +26,19 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
     ```
     apt-get install -y python3 python3-pip git sqlite3
     ```
+
 2. Install `antlr4` and `configparser` for Python.
     ```
     pip3 install antlr4-python3-runtime
     pip3 install configparser
     ```
-2. With all of these installed, clone this repository onto your client and every node in your cluster.
+
+3. With all of these installed, clone this repository onto your client and every node in your cluster.
     ```
     git clone https://github.com/glennga/sql-process.git
     ```
-3. The client node is the node that will perform some operation on the cluster of nodes. Every client node must contain a `clustercfg` file which holds some description of the cluster. *This file will vary depending on your desired client operation.* More specifications on this format is specified in the **Format of File: clustercfg** section below.
+
+4. The client node is the node that will perform some operation on the cluster of nodes. Every client node must contain a `clustercfg` file which holds some description of the cluster. *This file will vary depending on your desired client operation.* More specifications on this format is specified in the **Format of File: clustercfg** section below.
 
     An example `clustercfg` is depicted to create a table (DDL execution) across all nodes of a three-node system:
     ```
@@ -62,6 +65,7 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
     ```
     catalog.hostname=10.0.0.3:50001/cat.db
     ```
+
 4. Create the desired second argument file, which must also be stored on your client node. *This file also varies for each client program.* More specifications can be found in the **Format of File: csv** and **Format of File: sqlfile (or ddlfile)**  sections below.
 
     An example of a DDL file is depicted below:
@@ -103,10 +107,9 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
     Node 3[10.0.0.3:50003/node3.db]: Successful
     ```
 
-TODO: Finish the shit belowasdsadsadsaASDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
-7. With a table defined, the next operation that normally follows is the insertion of data. Use `runLCSV.py` to load data onto a partitioned cluster. Specify the `runLCSV.py` `clustercfg` file in the first argument, and the `csv` in the second:
+7. With a table defined, the next operation that normally follows is the insertion of data. Use `runSQL.py` with the `clustercfg` specified as the first argument, and the CSV to load in the second:
     ```
-    python3 loadCSV.py [clustercfg] [csv]
+    python3 runSQL.py [clustercfg] [csv]
     ```
 
     If this is successful, you should see the output below:
@@ -115,17 +118,18 @@ TODO: Finish the shit belowasdsadsadsaASDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
     Catalog node has been updated with the partitions.
     ```
 
-8. To view the data you just inserted, use `runSSQL.py` with a `SELECT` statement as the `sqlfile`. Specify the `runSSQL.py` `clustercfg` file in the first argument, and the `sqlfile` in the second:
+9. To view the data you just inserted, again use `runSQL.py` with the `clustercfg` specified as the first argument, and the `sqlfile` in the second:
+
     ```
     python3 runSQL.py [clustercfg] [sqlfile]
     ```
 
     If this is successful, you should see some variant of the output below:
     ```
-    Node 1: No tuples found.
-    Node 2: No tuples found.
-    Node 3: [123323232, Database Systems, Ramakrishnan,Raghu, ]
-    Node 3: [234323423, Operating Systems, Silberstein, Adam, ]
+    Node 1: | | No tuples found. | |
+    Node 2: | | No tuples found. | |
+    Node 3: | | 123323232 | Database Systems | Ramakrishnan | Raghu | |
+    Node 3: | | 234323423 | Operating Systems | Silberstein | Adam | |
 
     Summary:
     Node 1[10.0.0.3:50001/node1.db]: Successful
@@ -133,9 +137,51 @@ TODO: Finish the shit belowasdsadsadsaASDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
     Node 3[10.0.0.3:50003/node3.db]: Successful
     ```
 
-9. With the
 
 ## Usage
+### Directory Overview
+```
+sql-process/
+|-- lib/
+    |-- __init__.py
+    |-- parse/
+       |-- __init__.py
+       |-- SQLite.g4
+       |-- * ANTLR generated files *
+    |-- catalog.py
+    |-- database.py
+    |-- dissect.py
+    |-- error.py
+    |-- listen.py
+    |-- network.py
+    |-- parallel.py
+|-- test/
+    |-- data/
+        |-- comments.csv
+        |-- orders.csv
+        |-- * SQLite database files * 
+    |-- runDDL/
+        |-- * runDDL test files *
+    |-- runLCSV/
+        |-- * runLCSV test files *
+    |-- runSSQL/
+        |-- * runSSQL test files *
+    |-- runJSQL/
+        |-- * runJSQL test files *
+|-- parDBd.py
+|-- runSQL.py
+|-- runDDL.py
+|-- runLCSV.py
+|-- runSSQL.py
+|-- runJSQL.py
+```
+
+All libraries are defined in the `lib` folder. These contain functions that are shared among several of the client and server programs. Also included here are the generated ANTLR files, used to generate and walk a parse tree for some SQLite statement.
+
+The main programs are `runSQL.py` (client) and `parDBd.py` (server daemon). `runSQL.py` determines the desired function by reading the passed configuration file (`clustercfg`) and the second argument (`csv` or `sqlfile`). Each function exists as it's own client program, and can be used with or without the use of `runSQL.py`.
+
+All tests are located in the `test` folder. This tests each function of `runSQL.py`: `runDDL.py`, `runLCSV.py`, `runSSQL.py`, and `runJSQL.py`.
+
 ### Format of File: clustercfg
 The `clustercfg` file holds information about the cluster required to perform the desired operation. For each `clustercfg` file:
 
@@ -180,15 +226,15 @@ The `csv` file holds a list of tuples to insert into your cluster.
 ### Format of File: sqlfile (or ddlfile)
 The SQL file holds a single SQLite statement to execute on all nodes in the cluster.
 
-1. This statement must be written in SQLite 3.
+1. This statement must be written in SQLite 3 (https://www.sqlite.org/lang.html).
 2. This statement must be terminated with a semicolon.
 3. There must only exist one statement. If there exists multiple statements in this file, then only the first will be executed.
-4. This statement must deal with some table.
 
 ### Client Program: runDDL.py
 The `runDDL.py` file holds the code to create a table across all nodes in the catalog, and to setup the required metadata in the catalog node. The arguments to this script are the cluster configuration file and the DDL statement to execute:
 ```
 python3 runDDL.py [clustercfg] [ddlfile]
+python3 runSQL.py [clustercfg] [ddlfile]
 ```
 
 Using the given arguments, the following occurs:
@@ -196,72 +242,101 @@ Using the given arguments, the following occurs:
 2. Test the connection to the catalog node. This is meant to prioritize the logging of the metadata over executing statements without any history. If this is not successful, then an error is returned to the console and the program exits.
 3. Collect the node URIs from the `clustercfg` file. If an error exists with the node formatting here, the program exits with an error.
 4. If a connection to the catalog is able to be established, then the an execution command list is sent. This occurs in parallel, and spawns `N = numnodes` threads.
-    1. For each thread (node), an attempt to connect to a socket is made. If this is not successful, then an error message is printed to the console and the routine exits here.
+    1. For each thread (node), an attempt to connect to a socket is made. If this is not successful, then an error message is printed to the console and the program exits here.
     2. If the connection is successful, then the execution command list (specified in the **Protocol Design** section) is pickled and sent over the socket.
-    3. A response command list from the daemon is waited for. If there exists no response, then an error is printed to the console and the routine exits here.
-    4. If the response string from the command list is not `Success`, then the returned error message is displayed to the console and the routine exits here.
+    3. A response command list from the daemon is waited for. If there exists no response or the response is an error, then a message is printed to the console and the program exits here.
     5. Otherwise, a success message is printed to the console. The success is recorded in a list (denoted as `successful_nodes` here), and the connection to the daemon is closed.
-4. Once all threads are done executing, log all successful execution commands from the `successful_nodes` list. If this is not successful, print an error message to the console and the program exits.
+5. Once all threads are done executing, log all successful execution commands from the `successful_nodes` list to the catalog node. If this is not successful, the program exits with an error.
+6. Otherwise, a summary is printed.
 
-### Client Program: runSQL.py
-The `runSSQL.py` file holds the code to execute a general SQLite statement across all nodes in the cluster. If a DDL statement is passed here, then the program `runDDL.py` is forked and used instead. If forked, the `clustercfg` for the `runDDL.py` must be used in place of the `runSSQL.py` `clustercfg`.
+### Client Program: runLCSV.py
+
+The `runLCSV.py` file holds the code to load a comma-separated-file of tuples to a cluster of nodes. The location of each tuple is determined by the partitioning specified in the cluster configuration file. The arguments to this script are the cluster configuration file and the CSV of the tuples.
+
 ```
+python3 loadCSV.py [clustercfg] [csv]
+python3 runSQL.py [clustercfg] [csv]
+```
+
+Using the given arguments, the following occurs:
+
+1. Collect the catalog URI, and the partitioning information from the `clustercfg` file. If the `clustercfg` file is not properly formatted, the program exits with an error.
+2. Collect the node URIs from the catalog node. If this is not successful, then an error is returned to the console and the program exits.
+3. Verify the partitioning parameters collected with the number of node URIs retrieved. For hash partitioning, this means that `partition.param1 = |node URIs|`. For range partitioning, this means that `numnodes = |node URIs|`.
+4. Collect the columns from the first node in the node URIs list. If this is not successful, then an error is printed to the console and the program exits with an error.
+5. Connect to all nodes in the cluster. If any of these cannot be reached, then an error is printed to the console and the program exits with an error to preserve ACID. It wouldn't be ideal to only insert some of the data.
+6. Execute the appropriate insertion based on the specified `partition.method` parameter.
+   - If `nopartition` is specified, then the insertion is performed across all nodes. A SQL statement is prepared and sent over the socket with the rows to insert. This operation is performed for each node, serially (starting at node 1, ending at node N).
+   - If `hash` is specified, then a tuple is assigned to a node using the simple hash function: `H(X) = (column mod partition.param1) + 1`. The value for `column` is found by determining the index of the specified `partition.column` for a given line in the CSV. The SQL statement is prepared appropriately and stored in memory. Once all statements are constructed, the appropriate SQL and parameters are sent to each appropriate socket, serially (starting at node 1, ending at node N).
+   - If `range` is specified, then a tuple is assigned to a node using the ranges specified with `partition.node[node-id].param[1 or 2]`. `param1` indicates the lower bound that `column` must meet for a given node, and `param2` indicates the upper bound. If any of these bounds overlap, then the all nodes meeting the condition are passed the tuple. The value for `column` is found by determining the index of the specified `partition.column` for a given line in the CSV. The SQL statement is prepared appropriately and stored in memory. Once all statements are constructed, the appropriate SQL and parameters are sent to each appropriate socket, serially (starting at node 1, ending at node N).
+   - If there are any errors in the processes, we attempt to tell the server daemon to not commit any changes as we close with an error ourselves. Again, the reasoning behind not attempting to proceed from here is to preserve the ACID property. We do not want incomplete data in our cluster.
+7. If the insertion is successful, print a success message to the console.
+
+### Client Program: runSSQL.py
+The `runSSQL.py` file holds the code to execute a _trivial_ (no joins) SQLite statement across all nodes in the cluster. For nontrivial SQLite statements, use the `runJSQL.py` program. If the operation is a selection, then the results are displayed to the console. The arguments to this script are the cluster configuration file, and the SQL file to execute.
+
+```
+python3 runSSQL.py [clustercfg] [sqlfile]
 python3 runSQL.py [clustercfg] [sqlfile]
 ```
 
 Using the given arguments, the following occurs:
 1. Collect the catalog URI from the `clustercfg` file. Collect the SQL statement from the `sqlfile`. If this cannot be performed, the program exits with an error.
-2. If the SQL statement is found to be a `CREATE TABLE` or `DROP TABLE` statement (i.e. a DDL), then `runDDL.py` is forked with the arguments presented here.
-3. Test the connection to the catalog node. If this is not successful, then an error is returned to the console and the program exits.
 4. Collect the node URIs from the catalog node. If this is not successful, the an error is returned to the console and the program exits.
-5. The table name is parsed from the SQL statement. If this is an improperly formatted SQLite statement, then an error is returned to the console and the program exits.
-6. Create the shared memory segment for all nodes to record to. As opposed to `runDDL.py`, this script implements concurrency with the `multiprocessing` library as opposed to the `threading` library.
-7. Send the execution command list. This occurs in parallel, and creates `N = |Node URIs|` processes.
+3. The table name is parsed from the SQL statement. If this is an improperly formatted SQLite statement, then an error is returned to the console and the program exits.
+4. Send the execution command list. This occurs in parallel, and creates `N = |Node URIs|` threads.
     1. For each process (node), an attempt to connect to the socket is made. If this is not successful, then an error message is printed to the console and the routine exits here.
-    2. If the connection is successful, then the excitation command list is pickled and sent over the socket.
-    3. A response command list from the daemon is waited for. If there exists no response or an string is returned from the socket, then an error is printed to the console and the routine exits here.
+    2. If the connection is successful, then the execution command list is pickled and sent over the socket.
+    3. A response command list from the daemon is waited for. If there exists no response or an error is returned from the socket, then a message is printed to the console and the routine exits here.
     4. If the response command list is valid, then return any results from the socket. Listen and repeat until the terminating command string is sent.
-    5. Record the successful operation in the shared memory segment, and close the connection to the daemon.
-8. Once all processes are done executing, print a summary block that informs the client of the end state of all processes (i.e. failed or succeeded).
+    5. Record the successful operation in to the shared data section (a global list) and close the connection to the daemon.
+5. Once all processes are done executing, print a summary block that informs the client of the end state of all processes (i.e. failed or succeeded).
 
-### Client Program: loadCSV.py
-The `runLCSV.py` file holds the code to load a comma-separated-file of tuples to a cluster of nodes. The location of each tuple is determined by the partitioning specified in the cluster configuration file. The arguments to this script are the cluster configuration file and the CSV of the tuples.
+### Client Program: runJSQL.py
+
+The `runSSQL.py` file holds the code to execute a nontrivial (with joins) SQLite statement across all nodes in the cluster. *This will only work for statements that involve joins between exactly two tables.* For trivial SQLite statements, use the `runSSQL.py` program. If the operation is a selection, then the results are displayed to the console. The arguments to this script are the cluster configuration file, and the SQL file to execute.
+
 ```
-python3 loadCSV.py [clustercfg] [csv]
+python3 runJSQL.py [clustercfg] [sqlfile]
+python3 runSQL.py [clustercfg] [sqlfile]
 ```
 
-Using the given arguments, the following occurs:
+Using the given arguments, the following occurs. For brevity, this is more generalized than the described sequence in `runSSQL.py`:
+
 1. Collect the catalog URI, and the partitioning information from the `clustercfg` file. If the `clustercfg` file is not properly formatted, the program exits with an error.
-2. Collect the node URIs from the catalog node. If this is not successful, then an error is returned to the console and the program exits.
-3. Verify the partitioning parameters collected with the number of node URIs retrieved. For hash partitioning, this means that `partition.param1 = |node URIs|`. For range partitioning, this means that `numnodes = |node URIs|`.
-4. Collect the columns from the first node in the node URIs list. If this is not successful, then an error is printed to the console and the program exits with an error.
-5. Connect to all nodes in the cluster. If any of these cannot be reached, then an error is printed to the console and the program exits with an error. It wouldn't be ideal to only insert some of the data.
-6. Execute the appropriate insertion based on the specified `partition.method` parameter.
-    - If `nopartition` is specified, then the insertion is performed across all nodes. A SQL statement is prepared and sent over the socket with the rows to insert, dividing the message by 4kB each. This operation is performed for each node, serially (starting at node 1, ending at node N).
-    - If `hash` is specified, then a tuple is assigned to a node using the simple hash function: `H(X) = (column mod partition.param1) + 1`. The value for `column` is found by determining the index of the specified `partition.column` for a given line in the CSV. The SQL statement is prepared appropriately and stored in memory. Once all statements are constructed, the appropriate SQL and parameters are sent to each appropriate socket, serially (starting at node 1, ending at node N).
-    - If `range` is specified, then a tuple is assigned to a node using the ranges specified with `partition.node[node-id].param[1 or 2]`. `param1` indicates the lower bound that `column` must meet for a given node, and `param2` indicates the upper bound. If any of these bounds overlap, then the all nodes meeting the condition are passed the tuple. The value for `column` is found by determining the index of the specified `partition.column` for a given line in the CSV. The SQL statement is prepared appropriately and stored in memory. Once all statements are constructed, the appropriate SQL and parameters are sent to each appropriate socket, serially (starting at node 1, ending at node N).
-    - If there are any errors in the processes, print an error to the console and continue the insertion early. The reasoning behind continuing the insertion is to assume that the entire cluster is mostly operational. The user must handle each node that an error has occurred on manually.
-7. If the insertion is successful, print a success message to the console.
+2. Determine the tables involved in the join. If there does not exist exactly 2 tables here, then the program exists with an error.
+3. Collect the node URIs from the catalog node for both tables. If this is not successful, the an error is returned to the console and the program exits.
+4. Execute the join. The basic algorithm used here is the Nested Loop Join, with the nodes for the first table acting as the outer loop. To avoid access to multiple resources but still work in parallel, we spawn  `N = |Node URIS for Table 2|` threads for a given node of table 1. 
+   1. The thread is passed two node URIs pointing to different partitions (`P1, P2`) of two tables (`T1, T2`) . If these node URIs are not the same, then we inform `P1` to store `P2`'s table. If this is not successful, the program exits with an error message.
+   2. Perform the given SQL statement between `P1` and `P2`, and store the result in a new table. If an error occurs, display it and exit the program.
+5. The results of the join now exist scattered among every node for table 1 (the outer loop of the Nested Loop Join). Move the results of each join to one master node. This cannot be performed in parallel, as the master node would be shared between all threads/processes.
+   1. This method is passed two node URIs pointing to two different partitions (`P1, P2`) of two tables (`T1, T2`). Here, `P1` is the master partition with the master table `T1`. `P2` is the slave partition, with the slave table `T2`. If the two node URIs are not the same, then we inform `P1` to store `P2`'s table. If this is not successful, the program exits with an error message.
+   2. Perform a and store a union `P1 <- P1 U P2`  by taking the set difference between the two and storing the result. If this is not successful, the program exits with an error message.
+6. Request the result of the join from the master node, and display any results to console. Again, if this is not successful, the program exits with an error message.
+7. Perform a cleanup operation in parallel, spawning `N = |Node URIs for Table 1|` and removing any tables created in the join. Exit with an error if necessary.
 
 ### Server Program: parDBd.py
+
 The `parDBd.py` file holds the code to be run on all nodes in the cluster. This is the server daemon. The arguments to this script are the hostname and the port:
 ```
 python3 parDBd.py [hostname] [port]
 ```
 
 Using the specified arguments, the daemon listens on a given port. Once a connection is made, the following happens:
-1. Retrieve the response. This is referred to as the _command list_.
-2. Try to 'unpickle' (deserialize) the command list. If this cannot occur, an error is returned through the socket and the connection is closed.
-3. If the command list is able to be unpickled, check if the command list can be iterated over. If not, then the format of the command list is wrong. An error is returned through the socket and the connection is closed. The format command to the daemon must be specified in the **Protocol Design** section (before serialization).
+1. Spawn a new process to handle the execution of the command. Loop to listen for more connections and make the daemon available to other clients.
+2. Following the spawned process, we retrieve the first four bytes. This will inform us of the packet length = `ell`.
+3. Read `ell` bytes and deserialize the packet to obtain a _command list_. If this is not successful or the received object is not a list, an error is returned through the socket and the connection is closed. The format command to the daemon must be specified in the **Protocol Design** section (before serialization).
 4. Perform the desired operation based on the first element in the command list, or the _operation code_. If an error occurs during this process, return the error as a string. Otherwise, return a different command list containing the response operation code and the desired information.
-5. The current connection is closed, and we listen on the same port for another connection.
+5. The current connection is closed, and this specific process dies. This death is acknowledged upon a new connection to daemon.
 
 ## Protocol Design
 The general design of the communication between the server daemon and the client is as follows:
-1. Client sends a list, whose first element is the operation code and where all following elements are pieces of data required to perform the operation.
-2. Server daemon receives the list, and performs the operation based on the given operation code.
-3. To return a message, the server daemon returns a list containing the returned operation code and the success message or any other data as the following elements. If an error is received, then a string containing the error is sent instead of a list.
-4. The client receives the data from the server. If a string is returned, then an error has occurred and the client handles this appropriately. Otherwise, continue with the given data.
+1. Client serializes a list, whose first element is the operation code and where all following elements are pieces of data required to perform the operation.
+2. Client prefixes the packet with the length of this list, as a 4-byte C integer, and sends this list through the socket.
+3. Server daemon checks the first 4 bytes of the socket for this integer `ell`, and reads the first `ell` bytes. This is deserialized into the command list, and the server performs the operation specified in the first element.
+4. To return a message, the server daemon starts by serializing a list containing the returned operation code and the success message or any other data as the following elements. If an error is received, then a string containing the error is sent instead of a list.
+5. The server prefixes the packet with the length of this list, again as a 4-byte C integer and sends this through the socket.
+6. The client checks the first 4 bytes of the socket for this integer `ell_2`, and reads the first `ell_2` bytes. This is deserialized into the command list or error string, and the client handles each case appropriately.
 
 The specific operation codes are listed below:
 
@@ -272,6 +347,7 @@ Desired Operation | Operation Code | Client Sends... | Server Returns...
 **Client** wants to execute an insertion SQLite statement on a remote node, and wants to inform the server that more statements are arriving.  **Server** wants to acknowledge that the passed statement was executed successfully. | `YS` | `['YS', database-file-name, insertion-sql-to-execute, parameters-to-attach-to-statement]` | `['EY', 'Success']`
 **Client** wants to execute an insertion SQLite statement on a remote node, and wants to inform the server that no more statements are arriving.  **Server** wants to acknowledge that the passed statement was executed successfully. | `YZ` | `['YZ', database-file-name, insertion-sql-to-execute, parameters-to-attach-to-statement]` | `['EY', 'Success']`
 **Client** wants to stop the stream after sending various insert statements. **Server** wants to acknowledge this. | `YY` | `['YY']` | `['EY', 'Success']`
+**Client** wants to inform rollback any changes that the server has made since it's last commit. **Server** wants to acknowledge that this was successful. | `YX` | `['YX']` | `['EY', 'Success']`
 **Client** wants to execute a non-select SQLite statement on a remote node. **Server** wants to inform client that the operation was successful. | `E` | `['E', database-file-name, sql-to-execute]` | `['EZ', 'Success']`
 **Client** wants to execute a select SQLite statement on a remote node. **Server** wants to deliver tuples to client, and inform the client that more tuples are on the way. | `E` | `['E', database-file-name, sql-to-execute]` | `['ES', tuple-to-send]`
 **Client** wants to execute a select SQLite statement on a remote node. **Server** wants to deliver tuples to client, and inform this the last tuple it will send. | `E` | `['E', database-file-name, sql-to-execute]` | `['EZ', last-tuple-to-send]`
@@ -279,14 +355,49 @@ Desired Operation | Operation Code | Client Sends... | Server Returns...
 **Client** wants to record the type of partitioning used on the catalog node. **Server** (i.e. the catalog node) wants to inform the client that his operation was successful.| `K` | `['K', database-catalog-file-name, dictionary-describing-partition, number-of-nodes-in-cluster]` | `['EK', 'Success']`
 **Client** is requesting the node URIs of a specific table from the catalog node. **Server** (i.e. the catalog node) wants to deliver these node URIs to the client. | `U` | `['U', database-catalog-file-name, name-of-table]` | `['EU', list-of-node-uris]`
 **Client** is requesting the columns of a specific table from some node in the cluster (it is assumed that all nodes have the same tables). **Server** wants to deliver these columns to the client. | `P` | `['P', database-file-name, table-name]` | `['EP', list-of-columns-in-table]`
+**Client** is requesting that the server retrieve a table from a remote node, and store it in it's database. **Server** wants to inform the client of the table name that server stored the remote table as. | `B` | `['B', database-filename-list, name-of-tables-list, remote-node-uris]` | `['EB', name-of-new-table]`
 
 ## Troubleshooting
+All successful operations are returned with a code of 0. All errors are returned with a code of -1 and the errors are prefixed with the string `Error: `. Below are a list of common errors and their appropriate fixes.
+
+### runSQL.py Errors
+Message | Fix
+--- | ---
+ `Usage: python3 runSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+
+
+### runDDL.py Errors
+Message | Fix
+--- | ---
+ `Usage: python3 runDDL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+
+### runLCSV.py Errors
+Message | Fix
+--- | ---
+ `Usage: python3 runLCSV.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ 
+### runSSQL.py Errors
+Message | Fix
+--- | ---
+ `Usage: python3 runSSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ 
+### runJSQL.py Errors
+Message | Fix
+--- | ---
+ `Usage: python3 runJSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+
 ### parDBd.py Errors
-Error Code | Message | Fix |
---- | --- | ---
-2 | `Usage: python3 parDBd.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-3 | `Socket Error: [Errno 11001] getaddrinfo failed.` | Using the supplied hostname, a socket was unable to be binded. Double check your hostname.
-3 | `Socket Error: [Errno 98] Address is already in use.` | The specified port is already in use. Use another port.
+Message | Fix
+--- | ---
+ `Usage: python3 parDBd.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`invalid literal for int() with base 10: 'XXXXX'` | The port number could not be parsed. Ensure that the hostname is specified first, followed by the port.
+`[Errno 99] Cannot assign requested address` | A socket cannot be created with the given hostname. Double check the hostname passed.
+`Socket Error: [Errno 98] Address is already in use.` | The specified port is already in use. Use another port.
+
+
+
+
+
 
 ### runDDL.py Errors
 Error Code | Message | Fix

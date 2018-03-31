@@ -17,7 +17,7 @@ Usage: SQLFile.as_string(SQL_file)
 """
 
 # noinspection PyCompatibility
-from configparser import ConfigParser
+from configparser import ConfigParser, ParsingError
 
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
 
@@ -196,7 +196,7 @@ class ClusterCFG:
 
         # Append dummy section to given configuration file.
         config_string = ErrorHandle.attempt_operation(lambda: ClusterCFG._open_with_dummy(f),
-                                                      FileNotFoundError,
+                                                      (FileNotFoundError, ParsingError),
                                                       ErrorHandle.default_handler, True)
 
         # Return any errors if they exist.

@@ -78,7 +78,7 @@ class Network:
 
         # Attempt to bind the socket to the port.
         r = ErrorHandle.attempt_operation(lambda: sock.bind((host, int(port))),
-                                          OSError, handler, False)
+                                          (OSError, ValueError), handler, False)
 
         # Close this socket if this is not successful.
         if ErrorHandle.is_error(r):

@@ -222,6 +222,8 @@ if __name__ == '__main__':
 
     # Determine the working tables.
     t_tables = ErrorHandle.act_upon_error(SQLFile.table(s), ErrorHandle.fatal_handler, True)
+    if len(t_tables) != 2:
+        ErrorHandle.fatal_handler('There exists n != 2 tables involved in the given SQL.')
 
     # Collect the node URIs for the first table. Do not proceed if we cannot reach the catalog.
     r_1 = RemoteCatalog.return_node_uris(catalog_uri, t_tables[0])
