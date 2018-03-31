@@ -1,0 +1,11 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Query our database metadata for each node. Ensure that no new tables exist.
+sqlite3 $BASEDIR/../data/node1.db 'SELECT * FROM sqlite_master WHERE name LIKE "%TTTTT" OR name LIKE "%JJJJJ";'
+sqlite3 $BASEDIR/../data/node2.db 'SELECT * FROM sqlite_master WHERE name LIKE "%TTTTT" OR name LIKE "%JJJJJ";'
+sqlite3 $BASEDIR/../data/node3.db 'SELECT * FROM sqlite_master WHERE name LIKE "%TTTTT" OR name LIKE "%JJJJJ";'
+echo "A placeholder for the (hopefully) empty file."
+
+# Kill our daemons.
+pkill -f parDBd
