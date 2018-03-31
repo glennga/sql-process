@@ -71,9 +71,15 @@ class SQLFile:
         s = ErrorHandle.attempt_operation(lambda: SQLFile._open_file(f), FileNotFoundError,
                                           ErrorHandle.default_handler, True)
 
+        # Attempt to walk the parse tree. If this cannot be done, this is invalid SQL.
+        r = ErrorHandle.attempt_operation(lambda: SQLFile._generate_parse_tree(s),
+                                          Exception, ErrorHandle.default_handler)
+
         # Return any errors.
         if ErrorHandle.is_error(s):
             return s
+        elif ErrorHandle.is_error(r):
+            return ErrorHandle.wrap_error_tag('Could not walk parse tree with given SQL.')
         elif ';' not in s:
             return ErrorHandle.wrap_error_tag('No terminating semicolon.')
         else:

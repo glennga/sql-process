@@ -361,36 +361,52 @@ Desired Operation | Operation Code | Client Sends... | Server Returns...
 All successful operations are returned with a code of 0. All errors are returned with a code of -1 and the errors are prefixed with the string `Error: `. Below are a list of common errors and their appropriate fixes.
 
 ### runSQL.py Errors
+*Any other errors found with `runSQL.py` are a result of running the programs below. *
 Message | Fix
 --- | ---
- `Usage: python3 runSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-
+ `Usage: python3 runSQL.py [clustercfg] [sqlfile/csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+`Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
+`No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
 
 ### runDDL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runDDL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+`Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
+`No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
+`Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
 
 ### runLCSV.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runLCSV.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
- 
+ `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+
 ### runSSQL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runSSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
- 
+ `Usage: python3 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+`Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
+`No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
+`Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
+
 ### runJSQL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runJSQL.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3 runJSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+`[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
+`Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
+`No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
+`Cannot connect to the catalog. No statement executed.` | The catalog node catalog be reached. Ensure that the daemon is running for the catalog.
 
 ### parDBd.py Errors
 Message | Fix
 --- | ---
  `Usage: python3 parDBd.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
-`invalid literal for int() with base 10: 'XXXXX'` | The port number could not be parsed. Ensure that the hostname is specified first, followed by the port.
+`Could not interpret the given port argument.` | The port number could not be parsed. Ensure that the hostname is specified first, followed by the port.
 `[Errno 99] Cannot assign requested address` | A socket cannot be created with the given hostname. Double check the hostname passed.
 `Socket Error: [Errno 98] Address is already in use.` | The specified port is already in use. Use another port.
 

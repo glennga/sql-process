@@ -306,8 +306,11 @@ if __name__ == '__main__':
     if len(sys.argv) != 3:
         ErrorHandle.fatal_handler('Usage: python3 parDBd.py [hostname] [port]')
 
-    # Create the socket.
-    sock = Network.open_server(sys.argv[1], sys.argv[2], ErrorHandle.fatal_handler)
+    # Create the socket. Handle the port error outside here.
+    port_handler = lambda e: ErrorHandle.fatal_handler(e) \
+        if 'invalid literal for int()' not in str(e) \
+        else ErrorHandle.fatal_handler('Could not interpret the given port argument.')
+    sock = Network.open_server(sys.argv[1], sys.argv[2], port_handler)
 
     while True:
         # Listen and wait for a connection on this socket.
