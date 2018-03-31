@@ -46,8 +46,8 @@ class Database:
         :param is_join: Flag that indicates if the table is going to be used for a join or not.
         :return: String containing the generated table name.
         """
-        suffix = 'JJJJJ' if is_join else 'TTTTT'
-        return ''.join(random.choices(string.ascii_uppercase, k=10)) + suffix
+        p = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+        return p + 'JJJJJ' if is_join else 'TTTTT'
 
     @staticmethod
     def description(cur, s, handler=ErrorHandle.default_handler):
