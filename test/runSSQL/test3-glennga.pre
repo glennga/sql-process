@@ -1,0 +1,7 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Start the daemons for all nodes.
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50001 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50002 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50003 &

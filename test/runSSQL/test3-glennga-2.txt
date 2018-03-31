@@ -1,0 +1,21 @@
+Function Number: 3
+Username: glennga
+Test Number: 2
+
+The purpose of this test is verify the output of some simple query against the ORDERS table.
+To run the test:
+
+Make each script executable.
+`chmod +x test/runSSQL/test3-glennga.pre test/runSSQL/test3-glennga.post`
+
+Start the daemons.
+`./test/runSSQL/test3-glennga.pre`
+
+Execute the test. Direct the output to some file.
+`python3 runSQL.py test/runSSQL/test3-glennga.cfg test/runSSQL/test3-glennga-2.sql` | sort > /tmp/test3-glennga-2.out`
+
+Stop the daemons.
+`./test/runSSQL/test3-glennga.pre`
+
+Verify the output of this execution.
+`diff /tmp/test3-glennga-2.post.exp test/runSSQL/test3-glennga-2.post.exp`
