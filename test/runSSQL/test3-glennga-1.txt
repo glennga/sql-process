@@ -15,7 +15,7 @@ Execute the test. Direct the output to some file.
 `python3 runSQL.py test/runSSQL/test3-glennga.cfg test/runSSQL/test3-glennga-1.sql` | sort > /tmp/test3-glennga-1.out`
 
 Stop the daemons.
-`./test/runSSQL/test3-glennga.pre`
+`./test/runSSQL/test3-glennga.post`
 
 Verify the output of this execution.
 `diff /tmp/test3-glennga-1.post.exp test/runSSQL/test3-glennga-1.post.exp`
