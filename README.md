@@ -22,15 +22,17 @@ For all operations that involve a join between two (no more, no less) tables acr
 The repository has been tested with the TPC-H benchmark, broken into comments and orders tables. These can be found in the `test/data` folder.
 
 ## Getting Started
-1. To get started, all nodes in your cluster should have `python3` and `git`. To access your data outside of Python, install `sqlite3` as well:
+1. To get started, all nodes in your cluster should have `python3.6` (must be 3.6!) and `git`. To access your data outside of Python, install `sqlite3` as well:
     ```
-    apt-get install -y python3 python3-pip git sqlite3
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update
+    apt-get install -y python3.6 git sqlite3
     ```
 
 2. Install `antlr4` and `configparser` for Python.
     ```
-    pip3 install antlr4-python3-runtime
-    pip3 install configparser
+    python3.6 -m pip install antlr4-python3-runtime
+    python3.6 -m pip install configparser
     ```
 
 3. With all of these installed, clone this repository onto your client and every node in your cluster.
@@ -87,12 +89,12 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
 
 5. For each node in your cluster, navigate to this repository and start the server daemon. Specify the hostname in the first argument, and the port number in the second:
     ```
-    python3 parDBd.py [hostname] [port]
+    python3.6 parDBd.py [hostname] [port]
     ```
 
 6. For an empty cluster, use `runSQL.py` with the `clustercfg` specified as the first argument, and the `ddlfile` in the second:
     ```
-    python3 runSQL.py [clustercfg] [ddlfile]
+    python3.6 runSQL.py [clustercfg] [ddlfile]
     ```
 
     If this is successful, you should see some variant of the output below:
@@ -109,7 +111,7 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
 
 7. With a table defined, the next operation that normally follows is the insertion of data. Use `runSQL.py` with the `clustercfg` specified as the first argument, and the CSV to load in the second:
     ```
-    python3 runSQL.py [clustercfg] [csv]
+    python3.6 runSQL.py [clustercfg] [csv]
     ```
 
     If this is successful, you should see the output below:
@@ -121,7 +123,7 @@ The repository has been tested with the TPC-H benchmark, broken into comments an
 9. To view the data you just inserted, again use `runSQL.py` with the `clustercfg` specified as the first argument, and the `sqlfile` in the second:
 
     ```
-    python3 runSQL.py [clustercfg] [sqlfile]
+    python3.6 runSQL.py [clustercfg] [sqlfile]
     ```
 
     If this is successful, you should see some variant of the output below:
@@ -233,8 +235,8 @@ The SQL file holds a single SQLite statement to execute on all nodes in the clus
 ### Client Program: runDDL.py
 The `runDDL.py` file holds the code to create a table across all nodes in the catalog, and to setup the required metadata in the catalog node. The arguments to this script are the cluster configuration file and the DDL statement to execute:
 ```
-python3 runDDL.py [clustercfg] [ddlfile]
-python3 runSQL.py [clustercfg] [ddlfile]
+python3.6 runDDL.py [clustercfg] [ddlfile]
+python3.6 runSQL.py [clustercfg] [ddlfile]
 ```
 
 Using the given arguments, the following occurs:
@@ -254,8 +256,8 @@ Using the given arguments, the following occurs:
 The `runLCSV.py` file holds the code to load a comma-separated-file of tuples to a cluster of nodes. The location of each tuple is determined by the partitioning specified in the cluster configuration file. The arguments to this script are the cluster configuration file and the CSV of the tuples.
 
 ```
-python3 loadCSV.py [clustercfg] [csv]
-python3 runSQL.py [clustercfg] [csv]
+python3.6 loadCSV.py [clustercfg] [csv]
+python3.6 runSQL.py [clustercfg] [csv]
 ```
 
 Using the given arguments, the following occurs:
@@ -276,8 +278,8 @@ Using the given arguments, the following occurs:
 The `runSSQL.py` file holds the code to execute a _trivial_ (no joins) SQLite statement across all nodes in the cluster. For nontrivial SQLite statements, use the `runJSQL.py` program. If the operation is a selection, then the results are displayed to the console. The arguments to this script are the cluster configuration file, and the SQL file to execute.
 
 ```
-python3 runSSQL.py [clustercfg] [sqlfile]
-python3 runSQL.py [clustercfg] [sqlfile]
+python3.6 runSSQL.py [clustercfg] [sqlfile]
+python3.6 runSQL.py [clustercfg] [sqlfile]
 ```
 
 Using the given arguments, the following occurs:
@@ -297,8 +299,8 @@ Using the given arguments, the following occurs:
 The `runSSQL.py` file holds the code to execute a nontrivial (with joins) SQLite statement across all nodes in the cluster. *This will only work for statements that involve joins between exactly two tables.* For trivial SQLite statements, use the `runSSQL.py` program. If the operation is a selection, then the results are displayed to the console. The arguments to this script are the cluster configuration file, and the SQL file to execute.
 
 ```
-python3 runJSQL.py [clustercfg] [sqlfile]
-python3 runSQL.py [clustercfg] [sqlfile]
+python3.6 runJSQL.py [clustercfg] [sqlfile]
+python3.6 runSQL.py [clustercfg] [sqlfile]
 ```
 
 Using the given arguments, the following occurs. For brevity, this is more generalized than the described sequence in `runSSQL.py`:
@@ -319,7 +321,7 @@ Using the given arguments, the following occurs. For brevity, this is more gener
 
 The `parDBd.py` file holds the code to be run on all nodes in the cluster. This is the server daemon. The arguments to this script are the hostname and the port:
 ```
-python3 parDBd.py [hostname] [port]
+python3.6 parDBd.py [hostname] [port]
 ```
 
 Using the specified arguments, the daemon listens on a given port. Once a connection is made, the following happens:
@@ -364,7 +366,7 @@ All successful operations are returned with a code of 0. All errors are returned
 *Any other errors found with `runSQL.py` are a result of running the programs below. *
 Message | Fix
 --- | ---
- `Usage: python3 runSQL.py [clustercfg] [sqlfile/csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 runSQL.py [clustercfg] [sqlfile/csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
@@ -372,7 +374,7 @@ Message | Fix
 ### runDDL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
@@ -381,13 +383,13 @@ Message | Fix
 ### runLCSV.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
 
 ### runSSQL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
@@ -396,7 +398,7 @@ Message | Fix
 ### runJSQL.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 runJSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 runJSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `[Errno 2] No such file or directory: 'XXXXXX'` | The supplied arguments do not exist or cannot be found.
 `Could not walk parse tree with given SQL.` | The given SQL file is invalid. Ensure that the format follows the SQLite3 syntax.
 `No terminating semicolon.` | The given SQL file contains no terminating semicolon. Add one to the end of your file.
@@ -405,7 +407,7 @@ Message | Fix
 ### parDBd.py Errors
 Message | Fix
 --- | ---
- `Usage: python3 parDBd.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+ `Usage: python3.6 parDBd.py [hostname] [port]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 `Could not interpret the given port argument.` | The port number could not be parsed. Ensure that the hostname is specified first, followed by the port.
 `[Errno 99] Cannot assign requested address` | A socket cannot be created with the given hostname. Double check the hostname passed.
 `Socket Error: [Errno 98] Address is already in use.` | The specified port is already in use. Use another port.
@@ -418,7 +420,7 @@ Message | Fix
 ### runDDL.py Errors
 Error Code | Message | Fix
 --- | --- | ---
-2 | `Usage: python3 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+2 | `Usage: python3.6 runDDL.py [clustercfg] [ddlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 3 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `clustercfg` file cannot be found. Double check the path.
 4 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `ddlfile` file cannot be found. Double check the path.
 4 | `Error: No terminating semicolon.` | The supplied `ddlfile` does not have a terminating semi-colon to mark the end of the statement.
@@ -429,7 +431,7 @@ Error Code | Message | Fix
 ### runSQL.py Errors
 Error Code | Message | Fix
 --- | --- | ---
-2 | `Usage: python3 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+2 | `Usage: python3.6 runSSQL.py [clustercfg] [sqlfile]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 3 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `clustercfg` file cannot be found. Double check the path.
 4 | `Error: [Errno 2] No such file or directory: '...'` | The supplied `sqlfile` file cannot be found. Double check the path.
 4 | `Error: No terminating semicolon.` | The supplied `sqlfile` does not have a terminating semi-colon to mark the end of the statement.
@@ -441,7 +443,7 @@ Error Code | Message | Fix
 ### loadCSV.py Errors
 Error Code | Message | Fix
 --- | --- | ---
-2 | `Usage: python3 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
+2 | `Usage: python3.6 runLCSV.py [clustercfg] [csv]` | An incorrect number of arguments was supplied. There must exist exactly two arguments to this program.
 3 |`Error: Not found: '...'` | There exists a key error in the `clustercfg` file. Double check the `clustercfg` configuration specifications.
 4 | `Incorrect number of nodes specified in 'clustercfg'.` | If hash partitioning is specified, then the number of nodes in the cluster do not match the `partition.param1` in `clustercfg`. If range partitioning is specified, then the number of nodes in the cluster do match the `numnodes` in `clustercfg`. Use `runDDL.py` to change the table schema, or correct your `clustercfg` file.
 5 | `Catalog Error: Socket could not be established.` | The catalog could not be reached. Check your internet connection, the `catalog.hostname` entry in the `clustercfg` file, and make sure that the daemon is running on the catalog node.

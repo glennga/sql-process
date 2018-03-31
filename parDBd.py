@@ -304,7 +304,7 @@ def interpret(k_n):
 if __name__ == '__main__':
     # Ensure that we only have 2 arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('Usage: python3 parDBd.py [hostname] [port]')
+        ErrorHandle.fatal_handler('Usage: python3.6 parDBd.py [hostname] [port]')
 
     # Create the socket. Handle the port error outside here.
     port_handler = lambda e: ErrorHandle.fatal_handler(e) \

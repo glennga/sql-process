@@ -213,7 +213,7 @@ def display_join(master_list):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('Usage: python3 runJSQL.py [clustercfg] [ddlfile]')
+        ErrorHandle.fatal_handler('Usage: python3.6 runJSQL.py [clustercfg] [ddlfile]')
 
     # Parse both the clustercfg and sqlfile. Ensure that both are properly formatted.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),

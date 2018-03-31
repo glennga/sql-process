@@ -47,7 +47,7 @@ def execute_ddl(node_uri, name, s_n):
 if __name__ == '__main__':
     # Ensure that we have only two arguments.
     if len(sys.argv) != 3:
-        ErrorHandle.fatal_handler('Usage: python3 runDDL.py [clustercfg] [ddlfile]')
+        ErrorHandle.fatal_handler('Usage: python3.6 runDDL.py [clustercfg] [ddlfile]')
 
     # Collect the catalog node URI and the DDL file.
     catalog_uri = ErrorHandle.act_upon_error(ClusterCFG.catalog_uri(sys.argv[1]),

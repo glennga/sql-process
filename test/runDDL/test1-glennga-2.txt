@@ -12,7 +12,7 @@ Start the daemons.
 `./test/runDDL/test1-glennga-2.pre`
 
 Execute the test. Direct the output to some file.
-`python3 runSQL.py test/runDDL/test1-glennga-2.cfg test/runDDL/test1-glennga-2.sql | sort > /tmp/test1-glennga-2.out`
+`python3.6 runSQL.py test/runDDL/test1-glennga-2.cfg test/runDDL/test1-glennga-2.sql | sort > /tmp/test1-glennga-2.out`
 
 To verify the state of the database, check for any differences between the POST and the expected:
 `./test/runDDL/test1-glennga-2.post | sort > /tmp/test1-glennga-2.post.exp`
