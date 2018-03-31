@@ -2,8 +2,7 @@ Function Number: 1
 Username: glennga
 Test Number: 2
 
-The purpose of this test is create the COMMENTS table and test DDL execution. This is meant to be
-run **after** the runLCSV - 2 test. To run the test:
+The purpose of this test is create the COMMENTS table and test DDL execution. To run the test:
 
 Make each script executable.
 `chmod +x test/runDDL/test1-glennga-2.pre test/runDDL/test1-glennga-2.post`
