@@ -1,0 +1,13 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Query our database for the results of the ORDERS insertion.
+sqlite3 $BASEDIR/../data/node1.db 'SELECT "NODE1", * FROM ORDERS;'
+sqlite3 $BASEDIR/../data/node2.db 'SELECT "NODE2", * FROM ORDERS;'
+sqlite3 $BASEDIR/../data/node3.db 'SELECT "NODE3", * FROM ORDERS;'
+
+# Also, query the catalog for the 'dtables' entries.
+sqlite3 $BASEDIR/../data/catalog.db 'SELECT * FROM dtables WHERE tname="COMMENTS";'
+
+# Kill our daemons.
+pkill -f parDBd

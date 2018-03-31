@@ -1,0 +1,13 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Query our database for the results of the COMMENTS insertion.
+sqlite3 $BASEDIR/../data/node1.db 'SELECT "NODE1", * FROM COMMENTS;'
+sqlite3 $BASEDIR/../data/node2.db 'SELECT "NODE2", * FROM COMMENTS;'
+sqlite3 $BASEDIR/../data/node3.db 'SELECT "NODE3", * FROM COMMENTS;'
+
+# Also, query the catalog for the 'dtables' entries.
+sqlite3 $BASEDIR/../data/catalog.db 'SELECT * FROM dtables WHERE tname="COMMENTS";'
+
+# Kill our daemons.
+pkill -f parDBd

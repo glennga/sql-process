@@ -1,0 +1,15 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+
+# Start the daemons for all nodes.
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50001 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50002 &
+python3 $BASEDIR/../../parDBd.py 192.168.0.13 50003 &
+
+# Delete any data that may exist in the COMMENTS table.
+sqlite3 $BASEDIR/../data/node1.db 'BEGIN TRANSACTION; DELETE FROM COMMENTS; COMMIT;'
+sqlite3 $BASEDIR/../data/node2.db 'BEGIN TRANSACTION; DELETE FROM COMMENTS; COMMIT;'
+sqlite3 $BASEDIR/../data/node3.db 'BEGIN TRANSACTION; DELETE FROM COMMENTS; COMMIT;'
+
+# Also, reset any partition entries from our catalog node where tname is COMMENTS.
+sqlite3 $BASEDIR/../data/catalog.db 'UPDATE dtables SET partmtd=NULL, partcol=NULL, partparam1=NULL, partparam2=NULL WHERE tname="COMMENTS"'
