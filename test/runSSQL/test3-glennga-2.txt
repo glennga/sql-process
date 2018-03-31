@@ -18,4 +18,4 @@ Stop the daemons.
 `./test/runSSQL/test3-glennga.post`
 
 Verify the output of this execution.
-`diff /tmp/test3-glennga-2.post.exp test/runSSQL/test3-glennga-2.post.exp`
+`diff /tmp/test3-glennga-2.out test/runSSQL/test3-glennga-2.exp`
