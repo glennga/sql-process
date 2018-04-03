@@ -459,19 +459,16 @@ chmod +x test/runJSQL/test4-glennga-*.pre test/runJSQL/test4-glennga-*.post
 ./test/runJSQL/test4-glennga-1.pre
 ```
 
-3. Execute the test. Direct the output to some file.
+3. Execute the test. Direct the output to some file, and verify this operation.
 ```
 python3 runSQL.py test/runJSQL/test4-glennga.cfg test/runJSQL/test4-glennga-1.sql | sort > /tmp/test4-glennga-1.out
-```
-
-4. Kill the daemons.
-```
-./test/runJSQL/test4-glennga.post
-```
-
-5. Verify the output of this execution.
-```
 diff /tmp/test4-glennga-1.out test/runJSQL/test4-glennga-1.exp
+```
+
+4. Verify the output of this execution.
+```
+./test/runJSQL/test4-glennga.post | sort > /tmp/test4-glennga-1.exp
+diff /tmp/test4-glennga-1.post.exp test/runJSQL/test4-glennga-1.post.exp
 ```
 
 
