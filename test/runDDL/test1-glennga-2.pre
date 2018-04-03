@@ -12,6 +12,6 @@ sqlite3 $BASEDIR/../data/node2.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS ORDER
 sqlite3 $BASEDIR/../data/node3.db 'BEGIN TRANSACTION; DROP TABLE IF EXISTS ORDERS; COMMIT;'
 
 # Also, delete any entries from our catalog node where tname is ORDERS.
-if [[ -z $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND name="dtables";') ]]; then
+if [[ ! -z $(sqlite3 $BASEDIR/../data/catalog.db 'SELECT 1 FROM sqlite_master WHERE type="table" AND name="dtables";') ]]; then
     sqlite3 $BASEDIR/../data/catalog.db 'BEGIN TRANSACTION; DELETE FROM dtables WHERE tname="ORDERS"; COMMIT;'
 fi
